@@ -22,6 +22,11 @@
 #include <string.h>
 #include "romantic_collation.h"
 
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 #if defined(__aarch64__) || defined(_M_ARM64)
 #define RCOL_ARCH "aarch64"
 #elif defined(__x86_64__) || defined(_M_X64)
@@ -119,6 +124,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Canonical, uniform-case tokens\n"
         "                               only; note MIX is legitimately 1009.\n"
         "      --version-sort           Explicit form of the default dot handling\n"
+        "  -r, --reverse                Reverse the finished order\n"
+        "  -u, --unique                 Keep one line per equal sort key\n"
+        "  -o, --output <FILE>          Write to FILE (-, @stdout, or @stderr)\n"
         "  -h, --help                   Show this help\n"
         "      --about                  Print one-line version + platform\n"
         "      --version                Print the library version\n"
@@ -166,6 +174,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  -n, --num, --numeric[=TRZ]   Beides: Exponenten UND Tausendertrenner.\n"
         "      --roman                  Römische Zahlen nach Wert sortieren (VII < IX)\n"
         "      --version-sort           Ausdrückliche Form des Standardverhaltens\n"
+        "  -r, --reverse                Kehrt die fertige Reihenfolge um\n"
+        "  -u, --unique                 Eine Zeile je gleichem Sortierschlüssel\n"
+        "  -o, --output <DATEI>         Schreibt nach DATEI (-, @stdout, @stderr)\n"
         "  -h, --help / --hilfe         Diese Hilfe anzeigen\n"
         "      --about                  Version + Plattform in einer Zeile\n"
         "      --version                Bibliotheksversion anzeigen\n"
@@ -219,6 +230,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Jetons canoniques, de casse uniforme ;\n"
         "                               MIX vaut légitimement 1009.\n"
         "      --version-sort           Forme explicite du traitement des points par défaut\n"
+        "  -r, --reverse                Inverse l'ordre obtenu\n"
+        "  -u, --unique                 Une ligne par clé de tri égale\n"
+        "  -o, --output <FICHIER>       Écrit dans FICHIER (-, @stdout, @stderr)\n"
         "  -h, --help / --aide          Affiche cette aide\n"
         "      --about                  Affiche version + plateforme sur une ligne\n"
         "      --version                Affiche la version de la bibliothèque\n"
@@ -272,6 +286,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Solo tokens canónicos de una caja;\n"
         "                               MIX vale legítimamente 1009.\n"
         "      --version-sort           Forma explícita del tratamiento de puntos predeterminado\n"
+        "  -r, --reverse                Invierte el orden resultante\n"
+        "  -u, --unique                 Una línea por clave de ordenación igual\n"
+        "  -o, --output <ARCHIVO>       Escribe en ARCHIVO (-, @stdout, @stderr)\n"
         "  -h, --help / --ayuda         Muestra esta ayuda\n"
         "      --about                  Muestra versión + plataforma en una línea\n"
         "      --version                Muestra la versión de la biblioteca\n"
@@ -325,6 +342,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Solo token canonici a caso uniforme;\n"
         "                               MIX vale legittimamente 1009.\n"
         "      --version-sort           Forma esplicita della gestione predefinita dei punti\n"
+        "  -r, --reverse                Inverte l'ordine ottenuto\n"
+        "  -u, --unique                 Una riga per chiave di ordinamento uguale\n"
+        "  -o, --output <FILE>          Scrive su FILE (-, @stdout, @stderr)\n"
         "  -h, --help / --aiuto         Mostra questo aiuto\n"
         "      --about                  Mostra versione + piattaforma su una riga\n"
         "      --version                Mostra la versione della libreria\n"
@@ -378,6 +398,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Apenas tokens canônicos de uma só caixa;\n"
         "                               MIX vale legitimamente 1009.\n"
         "      --version-sort           Forma explícita do tratamento padrão dos pontos\n"
+        "  -r, --reverse                Inverte a ordem obtida\n"
+        "  -u, --unique                 Uma linha por chave de ordenação igual\n"
+        "  -o, --output <ARQUIVO>       Escreve em ARQUIVO (-, @stdout, @stderr)\n"
         "  -h, --help / --ajuda         Mostra esta ajuda\n"
         "      --about                  Mostra versão + plataforma numa linha\n"
         "      --version                Mostra a versão da biblioteca\n"
@@ -431,6 +454,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Només tokens canònics de caixa uniforme;\n"
         "                               MIX val legítimament 1009.\n"
         "      --version-sort           Forma explícita del tractament de punts per defecte\n"
+        "  -r, --reverse                Inverteix l'ordre obtingut\n"
+        "  -u, --unique                 Una línia per clau d'ordenació igual\n"
+        "  -o, --output <FITXER>        Escriu a FITXER (-, @stdout, @stderr)\n"
         "  -h, --help / --ajut          Mostra aquesta ajuda\n"
         "      --about                  Mostra versió + plataforma en una línia\n"
         "      --version                Mostra la versió de la biblioteca\n"
@@ -484,6 +510,9 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Doar tokeni canonici de aceeași literă;\n"
         "                               MIX este legitim 1009.\n"
         "      --version-sort           Forma explicită a tratării implicite a punctelor\n"
+        "  -r, --reverse                Inversează ordinea obținută\n"
+        "  -u, --unique                 O linie per cheie de sortare egală\n"
+        "  -o, --output <FIȘIER>        Scrie în FIȘIER (-, @stdout, @stderr)\n"
         "  -h, --help / --ajutor        Afișează acest ajutor\n"
         "      --about                  Afișează versiunea + platforma pe o linie\n"
         "      --version                Afișează versiunea bibliotecii\n"
@@ -708,6 +737,55 @@ static sort_key_status build_sort_key(sort_key_fn get_sort_key,
     return SORT_KEY_OK;
 }
 
+/* Drop rows whose sort key equals the previous kept row. `rows` must already
+ * be ordered by key. Frees the dropped keys. Returns the kept count. */
+static size_t unique_rows(row_t *rows, size_t count) {
+    if (count == 0) return 0;
+    size_t kept = 1;
+    for (size_t i = 1; i < count; i++) {
+        if (rows[i].key_len == rows[kept - 1].key_len
+            && memcmp(rows[i].key, rows[kept - 1].key, rows[i].key_len) == 0) {
+            free(rows[i].key);
+            rows[i].key = NULL;
+            continue;
+        }
+        rows[kept++] = rows[i];
+    }
+    return kept;
+}
+
+static void reverse_rows(row_t *rows, size_t count) {
+    for (size_t i = 0; i < count / 2; i++) {
+        row_t tmp = rows[i];
+        rows[i] = rows[count - 1 - i];
+        rows[count - 1 - i] = tmp;
+    }
+}
+
+/* `-`, `@stdout`, and NULL mean stdout. `@stderr` means stderr. Anything else
+ * is a file opened for write. The caller closes `*close_out`. */
+static int open_output(const char *out_path, FILE **out, int *close_out,
+                       const char **out_name) {
+    *out = stdout;
+    *close_out = 0;
+    *out_name = "stdout";
+    if (!out_path || strcmp(out_path, "-") == 0 || strcmp(out_path, "@stdout") == 0)
+        return 0;
+    if (strcmp(out_path, "@stderr") == 0) {
+        *out = stderr;
+        *out_name = "stderr";
+        return 0;
+    }
+    *out = fopen(out_path, "wb");
+    if (!*out) {
+        fprintf(stderr, "collate: cannot open '%s': %s\n", out_path, strerror(errno));
+        return 1;
+    }
+    *close_out = 1;
+    *out_name = out_path;
+    return 0;
+}
+
 /* Order by sort-key memcmp; break ties by raw line bytes for determinism. */
 static int cmp_rows(const void *pa, const void *pb) {
     const row_t *a = (const row_t *)pa;
@@ -777,7 +855,8 @@ static void extract_field(const uint8_t *line, size_t line_len,
 }
 
 static int cmd_sort(const char *path, uint32_t options,
-                    const char *sep, size_t sep_len, long key_field) {
+                    const char *sep, size_t sep_len, long key_field,
+                    int reverse, int unique, const char *out_path) {
     FILE *f = stdin;
     int close_f = 0;
     if (path && strcmp(path, "-") != 0 && strcmp(path, "@stdin") != 0) {
@@ -805,7 +884,22 @@ static int cmd_sort(const char *path, uint32_t options,
 
     if (nlines == 0) {
         free(data);
-        return 0; /* empty input => empty output */
+        FILE *out = stdout;
+        int close_out = 0;
+        const char *out_name = "stdout";
+        if (open_output(out_path, &out, &close_out, &out_name) != 0) return 1;
+        int empty_rc = 0;
+        if (fflush(out) == EOF || ferror(out)) {
+            fprintf(stderr, "collate: write error on %s: %s\n",
+                    out_name, strerror(errno));
+            empty_rc = 1;
+        }
+        if (close_out && fclose(out) == EOF && empty_rc == 0) {
+            fprintf(stderr, "collate: write error on %s: %s\n",
+                    out_name, strerror(errno));
+            empty_rc = 1;
+        }
+        return empty_rc;
     }
 
     row_t *rows = (row_t *)calloc(nlines, sizeof(row_t));
@@ -834,6 +928,9 @@ static int cmd_sort(const char *path, uint32_t options,
         if (at_end || data[i] == '\n') {
             const uint8_t *line = data + start;
             size_t line_len = i - start;
+            /* One trailing CR belongs to the CRLF splitter, not the line.
+             * A CR anywhere else stays data. */
+            if (line_len > 0 && line[line_len - 1] == '\r') line_len--;
             /* The sort key is computed from the chosen FIELD (whole line when no
              * separator is configured); the original line is still emitted. */
             const uint8_t *ksrc;
@@ -869,18 +966,30 @@ static int cmd_sort(const char *path, uint32_t options,
         }
     }
 
+    FILE *out = stdout;
+    int close_out = 0;
+    const char *out_name = "stdout";
     if (exit_code == 0) {
         qsort(rows, idx, sizeof(row_t), cmp_rows);
-        if (write_rows(stdout, rows, idx) != 0) {
+        if (unique) idx = unique_rows(rows, idx);
+        if (reverse) reverse_rows(rows, idx);
+        if (open_output(out_path, &out, &close_out, &out_name) != 0) {
+            exit_code = 1;
+        } else if (write_rows(out, rows, idx) != 0) {
             int write_errno = errno;
             exit_code = 1;
             if (write_errno != 0) {
-                fprintf(stderr, "collate: write error on stdout: %s\n",
-                        strerror(write_errno));
+                fprintf(stderr, "collate: write error on %s: %s\n",
+                        out_name, strerror(write_errno));
             } else {
-                fputs("collate: write error on stdout\n", stderr);
+                fprintf(stderr, "collate: write error on %s\n", out_name);
             }
         }
+    }
+    if (close_out && fclose(out) == EOF && exit_code == 0) {
+        exit_code = 1;
+        fprintf(stderr, "collate: write error on %s: %s\n",
+                out_name, strerror(errno));
     }
 
     for (size_t k = 0; k < idx; k++) free(rows[k].key);
@@ -892,6 +1001,13 @@ static int cmd_sort(const char *path, uint32_t options,
 
 int main(int argc, char *argv[]) {
     announce_debug_build();
+#if defined(_WIN32)
+    /* Text mode would translate CRLF on stdin and LF on stdout. The splitter
+     * strips one trailing CR itself, so the streams stay binary. */
+    _setmode(_fileno(stdin), _O_BINARY);
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
+#endif
 
     uint32_t options = 0;
     const char *path = NULL;
@@ -903,6 +1019,8 @@ int main(int argc, char *argv[]) {
     const char *lang_code = NULL;     /* explicit --lang/--sprache code */
     const char *inferred_lang = NULL; /* from a localized alias (e.g. --hilfe) */
     int want_help = 0, want_about = 0, want_version = 0;
+    int reverse = 0, unique = 0;
+    const char *out_path = NULL;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -999,6 +1117,26 @@ int main(int argc, char *argv[]) {
                 options &= ~((uint32_t)RCOL_DECIMAL
                              | (uint32_t)RCOL_DECIMAL_COMMA
                              | (uint32_t)RCOL_SCIENTIFIC);
+            } else if (strcmp(a, "-r") == 0 || strcmp(a, "--reverse") == 0) {
+                reverse = 1;
+            } else if (strcmp(a, "-u") == 0 || strcmp(a, "--unique") == 0) {
+                unique = 1;
+            } else if (strcmp(a, "--output") == 0 || strcmp(a, "-o") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "collate: %s requires an argument\n", a);
+                    return 2;
+                }
+                out_path = argv[++i];
+            } else if (strncmp(a, "--output=", 9) == 0) {
+                out_path = a + 9;
+                if (out_path[0] == '\0') {
+                    fputs("collate: --output requires an argument\n", stderr);
+                    return 2;
+                }
+            } else if (a[1] == 'o' && a[2] != '\0') {
+                /* -oPATH, including -o- for stdout. A path of "-" is stdin on
+                 * the input side; here it is stdout, same as -o -. */
+                out_path = a + 2;
             } else if (strcmp(a, "--field-separator") == 0) {
                 if (i + 1 >= argc) {
                     fputs("collate: --field-separator requires an argument\n", stderr);
@@ -1089,5 +1227,6 @@ int main(int argc, char *argv[]) {
     /* A separator with no explicit -k sorts by field 1. */
     if (sep_len > 0 && !key_set) key_field = 1;
 
-    return cmd_sort(path, options, sep, sep_len, key_field);
+    return cmd_sort(path, options, sep, sep_len, key_field,
+                    reverse, unique, out_path);
 }

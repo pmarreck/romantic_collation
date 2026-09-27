@@ -56,6 +56,9 @@ collate [OPTIONS] [FICHIER]
   -n, --num, --numeric[=SEP]   décimal + scientifique
       --roman                  nombres romains entiers
       --version-sort           ordre de versions explicite
+  -r, --reverse                inverse l'ordre obtenu
+  -u, --unique                 une ligne par clé de tri égale
+  -o, --output <FICHIER>       écrit dans FICHIER (-, @stdout, @stderr)
   -h, --help                   aide
       --about                  version et plateforme
       --lang <code>            langue de l’interface

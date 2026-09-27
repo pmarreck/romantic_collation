@@ -87,6 +87,9 @@ collate [OPTIONS] [FILE]      # sorts lines from FILE (or stdin) to stdout
       --roman                  Order whole-token Roman numerals by value
                                (VII < IX); canonical uniform-case tokens only
       --version-sort           Explicit form of the default dot handling
+  -r, --reverse                Reverse the finished order
+  -u, --unique                 Keep one line per equal sort key
+  -o, --output <FILE>          Write to FILE (-, @stdout, or @stderr)
   -h, --help                   Show help
       --about                  One-line version + platform
       --version                Library version

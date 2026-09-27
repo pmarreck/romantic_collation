@@ -55,6 +55,9 @@ collate [OPCIONES] [ARCHIVO]
   -n, --num, --numeric[=SEP]   decimal + científica
       --roman                  números romanos de token completo
       --version-sort           orden de versiones explícito
+  -r, --reverse                invierte el orden resultante
+  -u, --unique                 una línea por clave de ordenación igual
+  -o, --output <ARCHIVO>       escribe en ARCHIVO (-, @stdout, @stderr)
   -h, --help                   ayuda
       --about                  versión y plataforma
       --lang <code>            idioma de la interfaz

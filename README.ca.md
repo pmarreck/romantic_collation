@@ -52,6 +52,9 @@ collate [OPCIONS] [FITXER]
   -n, --num, --numeric[=SEP]   decimal + científica
       --roman                  numerals romans de token sencer
       --version-sort           ordre de versions explícit
+  -r, --reverse                inverteix l'ordre obtingut
+  -u, --unique                 una línia per clau d'ordenació igual
+  -o, --output <FITXER>        escriu a FITXER (-, @stdout, @stderr)
   -h, --help                   ajuda
       --about                  versió i plataforma
       --lang <code>            llengua de la interfície

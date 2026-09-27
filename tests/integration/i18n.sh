@@ -94,7 +94,7 @@ want_missing "English --help stays English (no de inference)" "Optionen" "$out"
 # ── localized aliases must be disjoint from English canonical options ──
 # Classify every current localized alias against the complete English option set;
 # a copied English alias would silently switch the UI language.
-english_options=(--help --about --version --lang --field-separator --key --code-point --decimal --decimals --dec --scientific --sci --roman --numeric --num --version-sort)
+english_options=(--help --about --version --lang --field-separator --key --code-point --decimal --decimals --dec --scientific --sci --roman --numeric --num --version-sort --reverse --unique --output)
 localized_aliases=(--hilfe --sprache --aide --langue --ayuda --idioma --aiuto --lingua --ajuda --linguagem --ajut --llengua --ajutor --limba)
 alias_collision=0
 for localized in "${localized_aliases[@]}"; do
@@ -106,7 +106,7 @@ for localized in "${localized_aliases[@]}"; do
 	done
 done
 if [[ $alias_collision -eq 0 ]]; then
-	pass "14 localized aliases are disjoint from 16 English options (224 comparisons)"
+	pass "14 localized aliases are disjoint from 19 English options (266 comparisons)"
 fi
 
 # An explicit language code overrides the UI language inferred from a localized

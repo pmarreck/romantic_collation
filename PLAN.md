@@ -386,6 +386,14 @@ Current test count: 369 passed, 0 failed (95 Zig unit + 3 C unit + 6 benchmark-p
             approval; recoverable copy moved to
             `~/.Trash/GROK_FEEDBACK-complete-20260827T1759EDT.md`.
             (2026-08-27 17:59 EDT)
+- [x] **Finish the leftover Grok product recommendations.** The eight warnings
+      and the advisories were already landed. This pass added trailing-CR
+      stripping, `-r`/`-u`/`-o` (file, `-`, `@stdout`, `@stderr`), and tests
+      that lock ill-formed UTF-8 (a bad byte is not the Latin-1 letter with
+      the same number) plus the ASCII-only expansion contract. `./test`:
+      391 passed. Not in scope: early-exit streaming compare, splitting
+      `src/collation.zig`, wiring the reserved option bits, or a wall-clock
+      `./bm` gate. (2026-08-27 14:30 EDT)
 - [ ] **Compatibility folding of LETTERS** (Peter's "what about other letter-like
       things?", 2026-07-31). Digits are done; the letter side remains. Fullwidth
       digits were one instance of a much larger, but BOUNDED and

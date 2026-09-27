@@ -154,6 +154,10 @@ void rcol_close(rcol_collator *coll);
  * equality can never be confused with an allocation error.
  *
  * A string pointer may be NULL only when its corresponding length is zero.
+ *
+ * Ill-formed UTF-8 is accepted. House style turns each bad byte into one
+ * element that sorts after letters, and the scanner always advances one byte.
+ * Code-point mode compares the raw bytes, including the bad ones.
  */
 rcol_status rcol_compare_utf8(
     const rcol_collator *coll,

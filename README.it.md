@@ -54,6 +54,9 @@ collate [OPZIONI] [FILE]
   -n, --num, --numeric[=SEP]   decimale + scientifica
       --roman                  numeri romani a token intero
       --version-sort           ordine delle versioni esplicito
+  -r, --reverse                inverte l'ordine ottenuto
+  -u, --unique                 una riga per chiave di ordinamento uguale
+  -o, --output <FILE>          scrive su FILE (-, @stdout, @stderr)
   -h, --help                   aiuto
       --about                  versione e piattaforma
       --lang <code>            lingua dell’interfaccia

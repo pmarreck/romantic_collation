@@ -350,6 +350,9 @@ test "finite fold and compatibility tables match the independent Unicode oracle"
     for (oracle.expansions) |expected| {
         const actual = compatExpand(expected.cp) orelse return error.MissingExpansion;
         try std.testing.expectEqualStrings(expected.replacement, actual);
+        // emitExpansion re-scans the replacement with the ASCII rules. A byte
+        // at or above 0x80 would be punctuation or a truncated sequence.
+        for (actual) |byte| try std.testing.expect(byte < 0x80);
     }
 
     // Count the complete Unicode domain so a new untested row cannot enter
@@ -1211,18 +1214,28 @@ pub fn sortKeyAlloc(alloc: std.mem.Allocator, options: u32, s: []const u8) ![]u8
             continue;
         }
 
-        // Decode one UTF-8 scalar; invalid bytes degrade to a single OTHER byte.
+        // Decode one UTF-8 scalar. A bad or truncated byte is NOT the Latin-1
+        // code point with the same number (0xFF is not ÿ, 0xA0 is not NBSP):
+        // those letters and spaces exist only as well-formed sequences.
         var cp: u21 = b;
         var adv: usize = 1;
-        const seqlen = std.unicode.utf8ByteSequenceLength(b) catch 1;
-        if (seqlen > 1 and i + seqlen <= s.len) {
-            if (std.unicode.utf8Decode(s[i .. i + seqlen])) |decoded| {
-                cp = decoded;
-                adv = seqlen;
-            } else |_| {
-                cp = b;
-                adv = 1;
+        var well_formed = b < 0x80;
+        if (!well_formed) {
+            const seqlen = std.unicode.utf8ByteSequenceLength(b) catch 0;
+            if (seqlen > 1 and i + seqlen <= s.len) {
+                if (std.unicode.utf8Decode(s[i .. i + seqlen])) |decoded| {
+                    cp = decoded;
+                    adv = seqlen;
+                    well_formed = true;
+                } else |_| {}
             }
+        }
+        if (!well_formed) {
+            try pushOtherPrimary(&l1, alloc, b);
+            try l2.append(alloc, WEIGHT_BASE + D_NONE);
+            try l3.append(alloc, CASE_NEUTRAL);
+            i += 1;
+            continue;
         }
 
         if (isSpace(cp)) {
@@ -1375,6 +1388,33 @@ test "code-point: differential against std.mem sort (MFIC oracle)" {
 }
 
 // ── Phase 2: opinionated house style ──
+
+test "house: a lone invalid byte sorts after letters" {
+    // 0xFF is not U+00FF (ÿ, encoded C3 BF). 0xA0 is not NBSP (encoded C2 A0).
+    try expectOrder(0, "zz", "\xff");
+    try expectOrder(0, "zz", "\xa0");
+    try expectOrder(0, "\xc2\xa0", "a");
+    try expectOrder(0, "a", "\xc3\xbf");
+}
+
+test "house: an invalid byte does not reorder the letter before it" {
+    try expectOrder(0, "a\xff", "b");
+}
+
+test "house: each invalid byte advances, so a bad byte is a proper prefix" {
+    try expectOrder(0, "\xff", "\xff\xfe");
+}
+
+test "house: an overlong NUL is not a NUL and sorts after letters" {
+    const h: u32 = 0;
+    try testing.expect((try compareAlloc(testing.allocator, h, "\xc0\x80", "\x00")) != 0);
+    try expectOrder(h, "zz", "\xc0\x80");
+}
+
+test "house: a torn UTF-8 lead is one post-letter element" {
+    try expectOrder(0, "zz", "\xc3");
+    try expectOrder(0, "\xc3\xa9", "\xc3");
+}
 
 test "house: structural-first, prefix, and numeric class ordering" {
     const h: u32 = 0;

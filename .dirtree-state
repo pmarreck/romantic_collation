@@ -53,6 +53,7 @@ annotate=[
 	tests/integration/house_style.sh = End-to-end house-style ordering assertions (structural-first, natural numeric, case/diacritic tie-breaks)
 	tests/integration/i18n.sh = i18n prepare-phase: language precedence, supported eight-catalog help/about, localized aliases, pt_br full-code parsing, and set-based alias collision checks.
 	tests/integration/latin_coverage.sh = Latin coverage as a classifier over sets: sensitivity (whole declared per-language char set must be letter-class) + specificity corpus (out-of-scope must stay CLASS_OTHER); ligature/Romanian/Catalan orderings
+	tests/integration/line_tools.sh = CLI tests for CRLF stripping, -r/--reverse, -u/--unique, and -o/--output
 	tests/integration/numeric_sort.sh = Numeric collation end-to-end: natural runs, arbitrary precision past the old 250-digit cap, bc differential oracle (independent arbitrary-precision) + sort -n corroboration, signed offset-0 rule, versions vs --decimal, and a sort -g precision negative control
 	tests/integration/readme_translations.sh = Checks reciprocal language-selector links across translated READMEs.
 	tests/unit = C-level unit tests for CLI adapter error paths

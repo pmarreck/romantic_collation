@@ -53,6 +53,9 @@ collate [OPȚIUNI] [FIȘIER]
   -n, --num, --numeric[=SEP]   zecimal + științific
       --roman                  numere romane de token întreg
       --version-sort           ordine explicită de versiune
+  -r, --reverse                inversează ordinea obținută
+  -u, --unique                 o linie per cheie de sortare egală
+  -o, --output <FIȘIER>        scrie în FIȘIER (-, @stdout, @stderr)
   -h, --help                   ajutor
       --about                  versiune și platformă
       --lang <code>            limba interfeței
