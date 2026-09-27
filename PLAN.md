@@ -429,6 +429,10 @@ Current test count: 369 passed, 0 failed (95 Zig unit + 3 C unit + 6 benchmark-p
 
 ## Deferred (future, noted in README Limits)
 
+Do not split `src/collation.zig`. About half of that file is tests, and the
+length of `cli/main.c` is the help catalogs. A split would scatter one
+algorithm without shrinking the part that changes. (2026-08-27 EDT)
+
 - [ ] i18n ENFORCE phase: all 50 locales, compile/test enforcement, bilingual
       errors, RTL handling, alias-collision comptime guard. Flip when the CLI
       surface stabilizes (see the i18n skill checklist).
