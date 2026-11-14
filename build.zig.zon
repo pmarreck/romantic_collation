@@ -1,7 +1,7 @@
 .{
     .name = .romantic_collation,
     .version = "0.1.0",
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.1",
     .dependencies = .{},
     .paths = .{
         "build.zig",
@@ -9,6 +9,8 @@
         "src",
         "include",
         "cli",
+        "tests",
+        "db",
     },
     // Zig-suggested fingerprint for package name `.romantic_collation`.
     // Lower 32 bits = hash of the name; upper 32 bits = random per-package.

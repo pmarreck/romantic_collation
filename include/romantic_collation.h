@@ -133,6 +133,15 @@ typedef struct rcol_collator rcol_collator;
  */
 const char *rcol_version(void);
 
+/* Ordering/key revision, independent of the library and C ABI versions.
+ * Revision 1 identifies the current keys. Recompute scientific-mode keys from
+ * older unversioned builds, which had exponent and mantissa defects.
+ * Persist options with stored keys;
+ * never mix revisions/options in an index. An ordering change requires a new
+ * SQL function revision and rebuilding affected indexes/materialized keys.
+ * Immutable handles may be shared by threads; close only after all calls end. */
+uint32_t rcol_ordering_version(void);
+
 /**
  * Open a collator through a size-versioned configuration. There is no locale
  * string in v1; the opinionated root order is the only order.

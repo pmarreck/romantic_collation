@@ -9,6 +9,14 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+if [[ -z "${NIX_BUILD_TOP:-}" ]]; then
+	# The derivation runs this same complete suite in disposable build state.
+	test_system=$(nix eval --impure --raw --expr builtins.currentSystem) || exit $?
+	nix build ".#checks.$test_system.test" --out-link result-test || exit $?
+	cat result-test/test.log
+	exit 0
+fi
 TOTAL_FAIL=0
 TOTAL_PASS=0
 
@@ -32,7 +40,7 @@ run_suite() {
 	fi
 	TOTAL_PASS=$((TOTAL_PASS + pass))
 	TOTAL_FAIL=$((TOTAL_FAIL + fail))
-	echo "$output" | tail -8
+	if [[ $rc -eq 0 ]]; then echo "$output" | tail -8; else echo "$output"; fi
 }
 
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -42,17 +50,9 @@ echo "╚═══════════════════════�
 # Build first (ReleaseFast for CLI tests; nix-sandboxed).
 echo ""
 echo "Building (ReleaseFast)..."
-if [[ -n "${NIX_BUILD_TOP:-}" ]]; then
-	zig build -Doptimize=ReleaseFast --prefix "$SCRIPT_DIR/zig-out" 2>&1 | tail -3 \
-		|| { echo "FATAL: build failed"; exit 1; }
-	zig_test_cmd="zig build test --summary all 2>&1"
-	c_test_cmd="zig build c-test --summary all 2>&1"
-else
-	"$SCRIPT_DIR/build" 2>&1 | tail -3 \
-		|| { echo "FATAL: build failed"; exit 1; }
-	zig_test_cmd="nix develop -c zig build test --summary all 2>&1"
-	c_test_cmd="nix develop -c zig build c-test --summary all 2>&1"
-fi
+zig build -Doptimize=fast --prefix "$SCRIPT_DIR/zig-out" || { echo "FATAL: build failed"; exit 1; }
+zig_test_cmd="zig build test -Doptimize=safe --summary all 2>&1"
+c_test_cmd="zig build c-test -Doptimize=safe --summary all 2>&1"
 
 # Zig unit tests — `--summary all` makes Zig emit "N/N tests passed"
 # which run_suite's grep can pick up.
@@ -61,10 +61,13 @@ run_suite "Zig Unit Tests" "$zig_test_cmd"
 # C adapter tests inject FFI failures that the successful Zig implementation
 # cannot produce on demand.
 run_suite "C CLI Adapter Unit Tests" "$c_test_cmd"
+run_suite "C ABI consumer" "zig build abi-test -Doptimize=safe --summary all"
+run_suite "Installed C ABI consumer" "cc -std=c11 -Wall -Wextra -Werror -I'$RCOL_LIBRARY/include' tests/unit/ffi_contract.c '$RCOL_LIBRARY/lib/libromantic_collation.a' -o '$SCRIPT_DIR/abi-consumer' && '$SCRIPT_DIR/abi-consumer'"
 
 # Benchmark policy is pure classification and belongs in the ordinary suite;
 # actual timing remains exclusive to ./bm.
 run_suite "Benchmark Policy Unit Tests" "bash '$SCRIPT_DIR/tests/unit/benchmark_policy.sh'"
+run_suite "Build failure propagation" "bash '$SCRIPT_DIR/tests/unit/build_failure.sh'"
 
 # Integration tests (CLI surface) — add as they're written
 for t in "$SCRIPT_DIR"/tests/integration/*.sh; do

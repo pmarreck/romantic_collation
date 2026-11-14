@@ -68,6 +68,11 @@ export fn rcol_version() callconv(.c) [*:0]const u8 {
     return Version.string.ptr;
 }
 
+/// Identifies the serialized key format and ordering semantics for indexes.
+export fn rcol_ordering_version() callconv(.c) u32 {
+    return 1;
+}
+
 fn openWithAllocator(allocator: std.mem.Allocator, config: ?*const Config, out: ?*?*Collator) Status {
     const out_collator = out orelse return .invalid_argument;
     out_collator.* = null;
@@ -131,8 +136,29 @@ export fn rcol_sort_key_utf8(
     const bytes = checkedBytes(s, slen) orelse return .invalid_argument;
     if (out == null and out_cap != 0) return .invalid_argument;
 
+    // A code-point key is exactly the input plus TERM. Write directly instead
+    // of allocating and copying a temporary key, including for length probes.
+    if (c.options & collation.OPT_CODE_POINT != 0) {
+        required.* = bytes.len + 1;
+        if (out_cap == 0) return .ok;
+        if (out_cap < required.*) return .buffer_too_small;
+        const dest = out.?[0..bytes.len];
+        if (@intFromPtr(dest.ptr) < @intFromPtr(bytes.ptr)) {
+            std.mem.copyForwards(u8, dest, bytes);
+        } else if (dest.ptr != bytes.ptr) {
+            std.mem.copyBackwards(u8, dest, bytes);
+        }
+        out.?[bytes.len] = 0;
+        return .ok;
+    }
+
     const key = collation.sortKeyAlloc(c.allocator, c.options, bytes) catch return .out_of_memory;
     defer c.allocator.free(key);
+    return copyKey(key, out, out_cap, required);
+}
+
+/// Publish a completed key only when the caller's buffer holds it in full.
+fn copyKey(key: []const u8, out: ?[*]u8, out_cap: usize, required: *usize) Status {
     required.* = key.len;
     if (out_cap == 0) return .ok;
     if (out_cap < key.len) return .buffer_too_small;
@@ -304,7 +330,7 @@ test "ffi: undersized sort-key buffers are reported and left untouched" {
         var reported: usize = 0;
         try testing.expectEqual(Status.buffer_too_small, rcol_sort_key_utf8(coll, s.ptr, s.len, &partial, cap, &reported));
         try testing.expectEqual(needed, reported);
-        try testing.expectEqualSlices(u8, &([_]u8{0xAA} ** partial.len), &partial);
+        try testing.expectEqualSlices(u8, &@as([128]u8, @splat(0xAA)), &partial);
     }
 }
 
@@ -325,18 +351,60 @@ test "ffi: invalid pointers and allocation failures have explicit statuses" {
 
     var failing = testing.FailingAllocator.init(testing.allocator, .{ .fail_index = 0 });
     var failing_coll = Collator{ .options = 0, .allocator = failing.allocator() };
-    try testing.expectEqual(Status.out_of_memory, rcol_sort_key_utf8(&failing_coll, null, 0, null, 0, &needed));
-    try testing.expectEqual(@as(usize, 0), needed);
-
     const long = try testing.allocator.alloc(u8, 9000);
     defer testing.allocator.free(long);
     @memset(long, 'a');
+    try testing.expectEqual(Status.out_of_memory, rcol_sort_key_utf8(&failing_coll, long.ptr, long.len, null, 0, &needed));
+    try testing.expectEqual(@as(usize, 0), needed);
     try testing.expectEqual(Status.out_of_memory, rcol_compare_utf8(&failing_coll, long.ptr, long.len, long.ptr, long.len, &order));
     try testing.expectEqual(@as(i32, 77), order);
 }
 
 test "ffi: status names are stable static strings" {
-    try testing.expectEqualStrings("ok", std.mem.span(rcol_status_name(@intFromEnum(Status.ok))));
-    try testing.expectEqualStrings("out of memory", std.mem.span(rcol_status_name(@intFromEnum(Status.out_of_memory))));
+    try testing.expectEqualStrings("ok", std.mem.span(rcol_status_name(@backingInt(Status.ok))));
+    try testing.expectEqualStrings("out of memory", std.mem.span(rcol_status_name(@backingInt(Status.out_of_memory))));
     try testing.expectEqualStrings("unknown status", std.mem.span(rcol_status_name(99)));
+}
+
+test "ffi: keys match the original key builder across modes" {
+    var coll = Collator{ .options = 0, .allocator = testing.allocator };
+    for ([_]u32{ 0, collation.OPT_CODE_POINT, collation.OPT_DECIMAL, collation.OPT_SCIENTIFIC, collation.OPT_ROMAN }) |options| {
+        coll.options = options;
+        for ([_][]const u8{ "", "file10", "café 1.5e５", "Ⅷ™", "a\x00\xff", "ș" }) |input| {
+            const expected = try collation.sortKeyAlloc(testing.allocator, options, input);
+            defer testing.allocator.free(expected);
+            var buffer: [512]u8 = undefined;
+            var required: usize = 0;
+            try testing.expectEqual(Status.ok, rcol_sort_key_utf8(&coll, input.ptr, input.len, &buffer, buffer.len, &required));
+            try testing.expectEqualSlices(u8, expected, buffer[0..required]);
+        }
+    }
+}
+
+test "ffi: code-point keys need no allocation even for long binary inputs" {
+    var failing = testing.FailingAllocator.init(testing.allocator, .{ .fail_index = 0 });
+    var coll = Collator{ .options = collation.OPT_CODE_POINT, .allocator = failing.allocator() };
+    const input: [9000]u8 = @splat(0xFF);
+    var output: [9001]u8 = undefined;
+    var required: usize = 0;
+    try testing.expectEqual(Status.ok, rcol_sort_key_utf8(&coll, &input, input.len, &output, output.len, &required));
+    try testing.expectEqualSlices(u8, &input, output[0..input.len]);
+    try testing.expectEqual(input.len + 1, required);
+    try testing.expectEqual(@as(u8, 0), output[input.len]);
+    // A length probe and insufficient buffer must also avoid the heap.
+    try testing.expectEqual(Status.ok, rcol_sort_key_utf8(&coll, &input, input.len, null, 0, &required));
+    @memset(&output, 0xAA);
+    try testing.expectEqual(Status.buffer_too_small, rcol_sort_key_utf8(&coll, &input, input.len, &output, input.len, &required));
+    try testing.expectEqual(@as(u8, 0xAA), output[0]);
+}
+
+test "ffi: direct code-point output supports overlapping input buffers" {
+    var coll = Collator{ .options = collation.OPT_CODE_POINT, .allocator = testing.allocator };
+    var bytes: [12]u8 = undefined;
+    for ([_]struct { src: usize, dst: usize }{ .{ .src = 0, .dst = 0 }, .{ .src = 0, .dst = 1 }, .{ .src = 1, .dst = 0 } }) |offset| {
+        @memcpy(bytes[offset.src..][0..4], "a\x00b\xff");
+        var required: usize = 0;
+        try testing.expectEqual(Status.ok, rcol_sort_key_utf8(&coll, bytes[offset.src..].ptr, 4, bytes[offset.dst..].ptr, 5, &required));
+        try testing.expectEqualSlices(u8, "a\x00b\xff\x00", bytes[offset.dst..][0..required]);
+    }
 }

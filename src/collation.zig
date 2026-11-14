@@ -919,7 +919,9 @@ fn pushGroupedNumber(
 /// Scan an explicit `e`/`E` exponent at `s[i]`, returning its value and the index
 /// just past it. A bare `e` with no digits (e.g. "3employees") is NOT an
 /// exponent, so the letter is left to the ordinary scanner.
-fn scanExponent(s: []const u8, i: usize) ?struct { exp: i64, end: usize } {
+const Exponent = struct { small: ?i64, digits: []const u8, negative: bool, end: usize };
+
+fn scanExponent(s: []const u8, i: usize) ?Exponent {
     if (i >= s.len or (s[i] != 'e' and s[i] != 'E')) return null;
     var j = i + 1;
     var neg = false;
@@ -927,18 +929,22 @@ fn scanExponent(s: []const u8, i: usize) ?struct { exp: i64, end: usize } {
         neg = s[j] == '-';
         j += 1;
     }
-    var v: i64 = 0;
+    const start = j;
+    var v: ?i64 = 0;
     var saw_digit = false;
     while (j < s.len) {
         const d = digitAt(s, j) orelse break;
         saw_digit = true;
-        // Saturate rather than overflow; an exponent this large is already
-        // beyond any representable magnitude and ordering is preserved.
-        if (v < 1_000_000_000) v = v * 10 + d.v;
+        if (v) |value| {
+            v = if (value <= @divTrunc(@as(i64, std.math.maxInt(i64)) - d.v, 10))
+                value * 10 + d.v
+            else
+                null;
+        }
         j += d.len;
     }
     if (!saw_digit) return null;
-    return .{ .exp = if (neg) -v else v, .end = j };
+    return .{ .small = if (v) |value| (if (neg) -value else value) else null, .digits = s[start..j], .negative = neg, .end = j };
 }
 
 /// Emit a signed exponent so that memcmp reproduces numeric order.
@@ -952,7 +958,7 @@ fn pushExponent(l1: *L1, alloc: std.mem.Allocator, exp: i64, value_neg: bool) !v
     const exp_neg = exp < 0;
     const flip = exp_neg != value_neg;
     try l1.append(alloc, if (flip) WEIGHT_BASE else WEIGHT_BASE + 1);
-    const mag: u64 = @intCast(if (exp_neg) -exp else exp);
+    const mag: u64 = @abs(exp);
     // Render the magnitude in decimal, then reuse the ordinary length+digits
     // machinery so arbitrary exponent widths order correctly.
     var buf: [20]u8 = undefined;
@@ -973,6 +979,84 @@ fn pushExponent(l1: *L1, alloc: std.mem.Allocator, exp: i64, value_neg: bool) !v
     try emitSigDigits(l1, alloc, digits, flip);
 }
 
+/// Add the mantissa's normalization offset without bounding exponent width.
+/// Decimal addition/subtraction is linear; ordinary exponents stay on i64.
+fn pushAdjustedExponent(l1: *L1, alloc: std.mem.Allocator, exp: ?Exponent, offset: i64, value_neg: bool) !void {
+    const ex = exp orelse return pushExponent(l1, alloc, offset, value_neg);
+    if (ex.small) |small| {
+        if (std.math.add(i64, small, offset)) |sum| {
+            return pushExponent(l1, alloc, sum, value_neg);
+        } else |_| {}
+    }
+    const raw = try alloc.alloc(u8, ex.digits.len);
+    defer alloc.free(raw);
+    var n: usize = 0;
+    var pos: usize = 0;
+    while (pos < ex.digits.len) {
+        const digit = digitAt(ex.digits, pos).?;
+        raw[n] = '0' + digit.v;
+        n += 1;
+        pos += digit.len;
+    }
+    var first: usize = 0;
+    while (first + 1 < n and raw[first] == '0') first += 1;
+    const a = raw[first..n];
+    var offset_buf: [20]u8 = undefined;
+    const b = try std.fmt.bufPrint(&offset_buf, "{d}", .{@abs(offset)});
+    const a_neg = ex.negative and !(a.len == 1 and a[0] == '0');
+    const b_neg = offset < 0;
+    const result = try alloc.alloc(u8, @max(a.len, b.len) + 1);
+    defer alloc.free(result);
+    var used: usize = 0;
+    var negative = a_neg;
+    if (a_neg == b_neg) {
+        var ia = a.len;
+        var ib = b.len;
+        var carry: u8 = 0;
+        while (ia != 0 or ib != 0 or carry != 0) {
+            var digit = carry;
+            if (ia != 0) {
+                ia -= 1;
+                digit += a[ia] - '0';
+            }
+            if (ib != 0) {
+                ib -= 1;
+                digit += b[ib] - '0';
+            }
+            result[used] = '0' + digit % 10;
+            used += 1;
+            carry = digit / 10;
+        }
+    } else {
+        const magnitude = if (a.len != b.len) std.math.order(a.len, b.len) else std.mem.order(u8, a, b);
+        const large = if (magnitude == .lt) b else a;
+        const small = if (magnitude == .lt) a else b;
+        negative = if (magnitude == .lt) b_neg else a_neg;
+        var ia = large.len;
+        var ib = small.len;
+        var borrow: i16 = 0;
+        while (ia != 0) {
+            ia -= 1;
+            var digit: i16 = @as(i16, large[ia] - '0') - borrow;
+            if (ib != 0) {
+                ib -= 1;
+                digit -= small[ib] - '0';
+            }
+            borrow = if (digit < 0) 1 else 0;
+            if (digit < 0) digit += 10;
+            result[used] = '0' + @as(u8, @intCast(digit));
+            used += 1;
+        }
+    }
+    while (used > 1 and result[used - 1] == '0') used -= 1;
+    std.mem.reverse(u8, result[0..used]);
+    if (used == 1 and result[0] == '0') negative = false;
+    const flip = negative != value_neg;
+    try l1.append(alloc, if (flip) WEIGHT_BASE else WEIGHT_BASE + 1);
+    try pushNumLength(l1, alloc, used, flip);
+    try emitSigDigits(l1, alloc, result[0..used], flip);
+}
+
 /// Emit one number in scientific normal form: a zero flag, then the decimal
 /// exponent of the leading significant digit, then the significant digits.
 ///
@@ -985,7 +1069,7 @@ fn pushScientific(
     alloc: std.mem.Allocator,
     s: []const u8,
     run: GroupedRun,
-    exp: i64,
+    exp: ?Exponent,
     neg: bool,
 ) !void {
     const int_slice = s[run.int_start..run.int_end];
@@ -1027,15 +1111,31 @@ fn pushScientific(
         @as(i64, @intCast(int_sig)) - 1
     else
         -@as(i64, @intCast(lead_zeros)) - 1;
-    try pushExponent(l1, alloc, e + exp, neg);
+    try pushAdjustedExponent(l1, alloc, exp, e, neg);
 
     // Significant digits, most significant first.
-    try emitSigDigits(l1, alloc, int_slice, neg);
-    try emitFracDigits(l1, alloc, frac_sig, neg);
+    const fraction = trimTrailingZeroDigits(frac_sig);
+    try emitSigDigits(l1, alloc, if (fraction.len == 0) trimTrailingZeroDigits(int_slice) else int_slice, neg);
+    try emitFracDigits(l1, alloc, fraction, neg);
     if (neg) try l1.append(alloc, NEG_END);
 
     try l2.append(alloc, WEIGHT_BASE + D_NONE);
     try l3.append(alloc, CASE_NEUTRAL);
+}
+
+/// Ignore spelling-only trailing mantissa zeros while preserving interior ones.
+fn trimTrailingZeroDigits(s: []const u8) []const u8 {
+    var end: usize = 0;
+    var i: usize = 0;
+    while (i < s.len) {
+        if (digitAt(s, i)) |digit| {
+            i += digit.len;
+            if (digit.v != 0) end = i;
+        } else {
+            i += 1; // Group separators are skipped by the numeric emitters.
+        }
+    }
+    return s[0..end];
 }
 
 /// A signed integer found at the start of the collated string. Decimal-mode
@@ -1159,7 +1259,7 @@ pub fn sortKeyAlloc(alloc: std.mem.Allocator, options: u32, s: []const u8) ![]u8
                 const run = scanGroupedNumber(s, if (neg or pos) i + 1 else i, comma_dec, absorb);
                 if (sci) {
                     const ex = scanExponent(s, run.end);
-                    try pushScientific(&l1, &l2, &l3, alloc, s, run, if (ex) |e| e.exp else 0, neg);
+                    try pushScientific(&l1, &l2, &l3, alloc, s, run, ex, neg);
                     i = if (ex) |e| e.end else run.end;
                 } else {
                     try pushGroupedNumber(&l1, &l2, &l3, alloc, s, run, neg);
@@ -1346,6 +1446,44 @@ fn orderKeys(ka: []const u8, kb: []const u8) i32 {
 
 const testing = std.testing;
 
+test "scientific exponents retain arbitrary precision and normalize carries" {
+    for ([_]u32{ OPT_SCIENTIFIC, OPT_SCIENTIFIC | OPT_DECIMAL }) |options| {
+        try expectOrder(options, "1e9999999999", "1e10000000000");
+        try expectOrder(options, "-1e100000000000000000000", "-1e99999999999999999999");
+        try expectOrder(options, "1e-100000000000000000000", "1e-99999999999999999999");
+        try testing.expectEqual(@as(i32, 0), try compareAlloc(testing.allocator, options, "10e99999999999999999999", "1e100000000000000000000"));
+        try testing.expectEqual(@as(i32, 0), try compareAlloc(testing.allocator, options, "0.1e100000000000000000001", "1e100000000000000000000"));
+        try testing.expectEqual(@as(i32, 0), try compareAlloc(testing.allocator, options, "10e-100000000000000000000", "1e-99999999999999999999"));
+    }
+}
+
+test "wide exponent normalization agrees with independent i128 arithmetic" {
+    for ([_]i128{ 99999999999999999999, 100000000000000000000, -100000000000000000000, -99999999999999999999, 9223372036854775807, -9223372036854775808 }) |base| {
+        for (0..41) |index| {
+            const offset: i128 = @as(i128, @intCast(index)) - 20;
+            var mantissa: [64]u8 = undefined;
+            var len: usize = 0;
+            if (offset >= 0) {
+                mantissa[0] = '1';
+                len = @intCast(offset + 1);
+                @memset(mantissa[1..len], '0');
+            } else {
+                mantissa[0] = '0';
+                mantissa[1] = '.';
+                len = @intCast(-offset + 2);
+                @memset(mantissa[2 .. len - 1], '0');
+                mantissa[len - 1] = '1';
+            }
+            var left_buf: [128]u8 = undefined;
+            var right_buf: [128]u8 = undefined;
+            const left = try std.fmt.bufPrint(&left_buf, "{s}e{d}", .{ mantissa[0..len], base });
+            const right = try std.fmt.bufPrint(&right_buf, "1e{d}", .{base + offset});
+            try testing.expectEqual(@as(i32, 0), try compareAlloc(testing.allocator, OPT_SCIENTIFIC, left, right));
+        }
+    }
+    try testing.expectEqual(@as(i32, 0), try compareAlloc(testing.allocator, OPT_SCIENTIFIC, "1e１００００００００００００００００００００", "1e100000000000000000000"));
+}
+
 /// Assert a < b under the given options (both directions + reflexive equality).
 fn expectOrder(options: u32, a: []const u8, b: []const u8) !void {
     try testing.expectEqual(@as(i32, -1), try compareAlloc(testing.allocator, options, a, b));
@@ -1366,9 +1504,14 @@ test "code-point: raw byte order (space<digit, Z<a, accent after z)" {
 test "code-point: differential against std.mem sort (MFIC oracle)" {
     // Independent oracle: std.mem.lessThan on raw bytes IS `LC_ALL=C sort`.
     var corpus = [_][]const u8{
-        "banana", "Apple", "apple", "café", "cafe", "file10", "file2",
-        "  two-spaces", " one-space", "zebra", "Zebra", "10", "9", "2",
-        "thing", "thing ", "thing2", "thingthing", "!bang", "~tilde",
+        "banana",       "Apple",      "apple",
+        "café",
+        "cafe",         "file10",     "file2",
+        "  two-spaces", " one-space", "zebra",
+        "Zebra",        "10",         "9",
+        "2",            "thing",      "thing ",
+        "thing2",       "thingthing", "!bang",
+        "~tilde",
     };
     const opts = OPT_CODE_POINT;
     // Sort with our comparator...
@@ -1786,10 +1929,10 @@ test "roman: the irreducible collisions, enumerated" {
     // Specificity corpus for the test above: without this half, a checker that
     // rejected everything would score 100% there.
     const are_numbers = [_][]const u8{
-        "mix", "CV",  "DI", "div", "MD",
-        "i",   "I",   "v",  "V",   "x",
-        "X",   "l",   "L",  "c",   "C",
-        "d",   "D",   "m",  "M",
+        "mix", "CV", "DI", "div", "MD",
+        "i",   "I",  "v",  "V",   "x",
+        "X",   "l",  "L",  "c",   "C",
+        "d",   "D",  "m",  "M",
     };
     for (are_numbers) |w| {
         if (!try romanCollatesAsNumber(w)) {
@@ -2348,15 +2491,55 @@ test "house: declared Latin coverage is EXHAUSTIVELY letter-class" {
     // every letter (the bug class this phase fixed).
     const covered = [_][]const u8{
         // French
-        "à", "â", "ä", "ç", "é", "è", "ê", "ë", "î", "ï", "ô", "ö", "ù", "û", "ü", "ÿ", "æ", "œ",
+        "à",
+        "â",
+        "ä",
+        "ç",
+        "é",
+        "è",
+        "ê",
+        "ë",
+        "î",
+        "ï",
+        "ô",
+        "ö",
+        "ù",
+        "û",
+        "ü",
+        "ÿ",
+        "æ",
+        "œ",
         // Spanish / Italian / Portuguese / Catalan
-        "á",  "í",  "ó",  "ú",  "ñ", "ã", "õ", "ì", "ò", "ŀ",
+        "á",
+        "í",
+        "ó",
+        "ú",
+        "ñ",
+        "ã",
+        "õ",
+        "ì",
+        "ò",
+        "ŀ",
         // German / Dutch
-        "ß",  "ĳ",
+        "ß",
+        "ĳ",
         // Romanian (incl. the legacy cedilla spellings)
-        "ă",  "ș",  "ț",  "ş",  "ţ",
+        "ă",
+        "ș",
+        "ț",
+        "ş",
+        "ţ",
         // Uppercase forms must fold too.
-        "Æ",  "Œ",  "ẞ",  "Ĳ",  "Ă", "Ș", "Ț", "É", "Ü", "Ñ",
+        "Æ",
+        "Œ",
+        "ẞ",
+        "Ĳ",
+        "Ă",
+        "Ș",
+        "Ț",
+        "É",
+        "Ü",
+        "Ñ",
     };
     for (covered) |c| {
         if (!try collatesAsLetter(c)) {

@@ -1,0 +1,4 @@
+comment = 'Reproducible natural ordering through binary sort keys'
+default_version = '1.0'
+module_pathname = '$libdir/romantic_collation'
+relocatable = true

@@ -67,7 +67,7 @@ out=$(printf 'x:a\ny:B\n' | "$CLI" -t: -k2 --code-point 2>/dev/null)
 assert_eq "field sort combined with --code-point" $'y:B\nx:a' "$out"
 
 # ── -k without any separator is a usage error (exit 2, clean stdout) ──
-stdout=$(printf 'a\nb\n' | "$CLI" -k2 2>/dev/null)
+stdout=$("$CLI" -k2 <<< $'a\nb' 2>/dev/null)
 rc=$?
 if [[ $rc -eq 2 && -z "$stdout" ]]; then
 	pass "-k without separator is a usage error"

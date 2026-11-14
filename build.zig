@@ -12,10 +12,10 @@ pub fn build(b: *std.Build) void {
     }
     const target = b.resolveTargetQuery(target_query);
     const optimize = b.option(
-        std.builtin.OptimizeMode,
+        std.lang.Optimize,
         "optimize",
         "Optimization mode (default: ReleaseFast)",
-    ) orelse .ReleaseFast;
+    ) orelse .fast;
 
     // ─── Core library module (pure Zig, no I/O) ──────────────────────────
     // Exposed for downstream Zig consumers who want to skip the C ABI.
@@ -34,9 +34,11 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
+            .pic = if (target.result.os.tag == .windows) null else true,
         }),
     });
     b.installArtifact(lib);
+    lib.installHeader(b.path("include/romantic_collation.h"), "romantic_collation.h");
 
     // ─── C CLI executable (dogfoods the FFI) ─────────────────────────────
     // In Zig 0.16, linkLibrary / addCSourceFile / addIncludePath all live on
@@ -62,7 +64,7 @@ pub fn build(b: *std.Build) void {
     // ─── Run step ────────────────────────────────────────────────────────
     const run_cmd = b.addRunArtifact(cli);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
     b.step("run", "Run the collate CLI").dependOn(&run_cmd.step);
 
     // ─── Unit tests ──────────────────────────────────────────────────────
@@ -98,6 +100,13 @@ pub fn build(b: *std.Build) void {
     const run_c_tests = b.addRunArtifact(c_tests);
     b.step("c-test", "Run C CLI adapter unit tests").dependOn(&run_c_tests.step);
 
+    const abi_mod = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true });
+    abi_mod.addCSourceFile(.{ .file = b.path("tests/unit/ffi_contract.c"), .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" } });
+    abi_mod.addIncludePath(b.path("include"));
+    abi_mod.linkLibrary(lib);
+    const abi_test = b.addRunArtifact(b.addExecutable(.{ .name = "ffi-contract-test", .root_module = abi_mod }));
+    b.step("abi-test", "Exercise the public C ABI from a separate consumer").dependOn(&abi_test.step);
+
     // ─── Property fuzzer ─────────────────────────────────────────────────
     // Checks the ORDERING laws (key-order == compare-order, reflexivity,
     // antisymmetry, transitivity, C-safe keys) rather than merely "does it
@@ -115,6 +124,6 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(fuzz_exe);
     const run_fuzz = b.addRunArtifact(fuzz_exe);
     run_fuzz.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_fuzz.addArgs(args);
+    run_fuzz.addPassthruArgs();
     b.step("fuzz", "Run the collation property fuzzer").dependOn(&run_fuzz.step);
 }

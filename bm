@@ -66,12 +66,11 @@ echo "corpus N=$BM_N  seed=$BM_SEED  warmup=$WARMUP"
 # ── Build collate (ReleaseFast, static) ──────────────────────────────────
 echo ""
 echo "Building collate (ReleaseFast)..."
-if ! nix build 2>&1 | tail -2; then
+if ! nix build; then
 	echo "FATAL: nix build failed" >&2
 	exit 1
 fi
 COLLATE="$SCRIPT_DIR/result/bin/collate"
-[ -x "$COLLATE" ] || COLLATE="$SCRIPT_DIR/zig-out/bin/collate"
 if [ ! -x "$COLLATE" ]; then echo "FATAL: collate not built" >&2; exit 1; fi
 
 # ── Detect an available UTF-8 locale ─────────────────────────────────────

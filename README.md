@@ -22,6 +22,15 @@ identical** results on glibc, musl, macOS, and Windows.
 
 There is an escape hatch: `--code-point` gives you exact `LC_ALL=C sort` order.
 
+SQLite and PostgreSQL extensions now expose indexable binary sort keys:
+`ORDER BY romantic_key_v1(name)`. See [database setup and examples](docs/DATABASES.md).
+The compiler is pinned to Zig 0.17.1; correctness tests run with runtime safety enabled.
+Scientific exponents now retain arbitrary precision, including normalization
+carries and negative exponents. Code-point key generation writes directly to
+the caller's buffer without a temporary allocation. Recompute any scientific-mode
+keys stored by an older build when upgrading; exponent ordering and equivalent
+mantissa spellings are now corrected.
+
 ## The opinionated house style (the default)
 
 In priority order:
@@ -63,12 +72,43 @@ In priority order:
 ## Build & test
 
 ```sh
-./build          # ReleaseFast via `nix build`; installs to zig-out/bin/collate
-./test           # Zig unit tests + CLI integration tests; exit code = # failures
-./build --debug  # local debug build via bare `zig build`
+./build          # optimized Nix package, retained at result/
+./test           # safety-enabled unit tests, CLI tests, real database tests
+./build --debug  # debug Nix package
+./result/bin/collate --help
 ```
 
 Native Linux builds are fully static (musl), so the binary runs anywhere.
+
+The package includes `lib/libromantic_collation.a` and
+`include/romantic_collation.h`. Database modules use the server's native libc.
+For embedding in a native C application, `nix build .#library --out-link
+result-library` builds the archive against the host libc; compile with
+`-Iresult-library/include` and link `result-library/lib/libromantic_collation.a`.
+
+## Database ordering
+
+```sh
+nix build .#sqlite-extension --out-link result-sqlite
+nix build .#postgres-extension --out-link result-postgres
+```
+
+After loading the matching extension:
+
+```sql
+SELECT name FROM items ORDER BY romantic_key_v1(name);
+CREATE INDEX items_romantic_v1 ON items(romantic_key_v1(name));
+```
+
+Both engines return binary keys and support expression indexes. These functions
+provide ordering through `ORDER BY`; they do not change text `=` or `LIKE`, or
+install a native `COLLATE` provider. NULLs propagate. Optional integer options
+match the C API, for example `romantic_key_v1(name, 64)` enables Roman numerals.
+Equal keys can represent different strings, and a UNIQUE key index enforces
+that equivalence. Keep ordering revisions/options fixed for each index; rebuild
+stored keys and indexes when migrating them. PostgreSQL needs a UTF8 database
+and a module compiled for its server major. Full setup and migration guidance:
+[docs/DATABASES.md](docs/DATABASES.md).
 
 ## CLI
 
@@ -265,8 +305,8 @@ virtue of being unrecognized.
   exception is Romanian `s`/`t` plus combining comma-below or cedilla, which
   canonicalizes with precomposed `ș`/`ț` and legacy `ş`/`ţ`. Full Unicode
   normalization is deferred.
-- `strcoll8` builds temporary keys in an 8 KiB stack scratch buffer and falls
-  back to the heap for oversized inputs. Precomputing sort keys still wins when
+- `rcol_compare_utf8` builds temporary keys in an 8 KiB stack scratch buffer and falls
+  back to the heap for oversize inputs. Precomputing sort keys still wins when
   each string is compared many times; SIMD/streaming compare is deferred.
 - **Numeric caveats are enumerated in [docs/NUMERIC.md](docs/NUMERIC.md)** — in
   short: default text sort distinguishes leading zeroes, numeric modes collapse

@@ -47,11 +47,8 @@ echo "iterations : $ITERATIONS"
 echo "seed       : $SEED    (rerun exactly: ./fuzz $ITERATIONS $SEED)"
 echo ""
 
-if command -v nix >/dev/null 2>&1; then
-	FUZZ_ITERATIONS="$ITERATIONS" FUZZ_SEED="$SEED" nix develop -c zig build fuzz
-else
-	FUZZ_ITERATIONS="$ITERATIONS" FUZZ_SEED="$SEED" zig build fuzz
-fi
+nix build --out-link result-fuzz || exit $?
+FUZZ_ITERATIONS="$ITERATIONS" FUZZ_SEED="$SEED" "$SCRIPT_DIR/result-fuzz/bin/collation-fuzz"
 rc=$?
 
 echo ""

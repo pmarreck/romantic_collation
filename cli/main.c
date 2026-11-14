@@ -76,6 +76,7 @@ typedef struct {
     const char *help_alias;  /* localized --help; NULL for English */
     const char *lang_alias;  /* localized --lang; NULL for English */
     const char *about_desc;  /* trailing one-line description in --about */
+    const char *extra_help;
     const char *help_text;   /* full --help body */
 } messages_t;
 
@@ -85,6 +86,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         NULL,
         NULL,
         "locale-free opinionated collation",
+        "\nScientific exponents have arbitrary precision.\n"
+        "Database extensions (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Returns indexable binary keys; options match the C ABI.\n"
+        "  Build: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Setup, equality, index upgrades: docs/DATABASES.md\n",
         "collate — fast, opinionated, reproducible, locale-free line sort\n"
         "\n"
         "Usage:\n"
@@ -141,6 +148,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--hilfe",
         "--sprache",
         "gebietsschema-freie, eigensinnige Sortierung",
+        "\nWissenschaftliche Exponenten haben beliebige Genauigkeit.\n"
+        "Datenbank-Erweiterungen (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Indizierbare binäre Schlüssel; Optionen wie in der C-ABI.\n"
+        "  Build: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Einrichtung und Indexmigration: docs/DATABASES.md\n",
         "collate — schnelle, eigensinnige, reproduzierbare Zeilensortierung ohne Gebietsschema\n"
         "\n"
         "Verwendung:\n"
@@ -191,6 +204,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--aide",
         "--langue",
         "collation assumée sans paramètres régionaux",
+        "\nLes exposants scientifiques ont une précision arbitraire.\n"
+        "Extensions de base de données (SQLite / PostgreSQL) :\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Clés binaires indexables ; options de l’ABI C.\n"
+        "  Compilation : nix build .#sqlite-extension .#postgres-extension\n"
+        "  Installation et migration des index : docs/DATABASES.md\n",
         "collate — tri de lignes rapide, assumé, reproductible, sans paramètres régionaux\n"
         "\n"
         "Utilisation :\n"
@@ -247,6 +266,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--ayuda",
         "--idioma",
         "ordenación sin configuración regional y con criterio propio",
+        "\nLos exponentes científicos tienen precisión arbitraria.\n"
+        "Extensiones de bases de datos (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Claves binarias indexables; opciones de la ABI C.\n"
+        "  Compilar: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Instalación y migración de índices: docs/DATABASES.md\n",
         "collate — ordenación de líneas rápida, con criterio propio, reproducible y sin configuración regional\n"
         "\n"
         "Uso:\n"
@@ -303,6 +328,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--aiuto",
         "--lingua",
         "collazione indipendente dalla locale e con criterio proprio",
+        "\nGli esponenti scientifici hanno precisione arbitraria.\n"
+        "Estensioni per database (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Chiavi binarie indicizzabili; opzioni dell’ABI C.\n"
+        "  Compilazione: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Installazione e migrazione degli indici: docs/DATABASES.md\n",
         "collate — ordinamento di righe rapido, con criterio proprio, riproducibile e indipendente dalla locale\n"
         "\n"
         "Uso:\n"
@@ -359,6 +390,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--ajuda",
         "--linguagem",
         "ordenação independente da configuração regional e com critério próprio",
+        "\nOs expoentes científicos têm precisão arbitrária.\n"
+        "Extensões de banco de dados (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Chaves binárias indexáveis; opções da ABI C.\n"
+        "  Compilar: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Instalação e migração de índices: docs/DATABASES.md\n",
         "collate — ordenação de linhas rápida, com critério próprio, reproduzível e independente da configuração regional\n"
         "\n"
         "Uso:\n"
@@ -415,6 +452,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--ajut",
         "--llengua",
         "ordenació sense configuració regional i amb criteri propi",
+        "\nEls exponents científics tenen precisió arbitrària.\n"
+        "Extensions de bases de dades (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Claus binàries indexables; opcions de l’ABI C.\n"
+        "  Compilació: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Instal·lació i migració d’índexs: docs/DATABASES.md\n",
         "collate — ordenació de línies ràpida, amb criteri propi, reproduïble i sense configuració regional\n"
         "\n"
         "Ús:\n"
@@ -471,6 +514,12 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "--ajutor",
         "--limba",
         "sortare fără configurare regională și cu reguli proprii",
+        "\nExponenții științifici au precizie arbitrară.\n"
+        "Extensii pentru baze de date (SQLite / PostgreSQL):\n"
+        "  ORDER BY romantic_key_v1(name)\n"
+        "  Chei binare indexabile; opțiunile ABI-ului C.\n"
+        "  Compilare: nix build .#sqlite-extension .#postgres-extension\n"
+        "  Instalare și migrarea indexurilor: docs/DATABASES.md\n",
         "collate — sortare de linii rapidă, cu reguli proprii, reproductibilă și fără configurare regională\n"
         "\n"
         "Utilizare:\n"
@@ -622,6 +671,7 @@ static lang_t resolve_lang(const char *explicit_code) {
 
 static int print_help(lang_t lang) {
     fputs(MESSAGES[lang].help_text, stdout);
+    fputs(MESSAGES[lang].extra_help, stdout);
     return 0;
 }
 

@@ -263,7 +263,7 @@ Every item below is verified behavior, not speculation.
 | 7 | **In default (version) mode, a dotted negative only signs the integer part**: `-1.4 < -1.5` | The fraction is a separate positive run. Numerically wrong, but self-consistent as *version* ordering. Use `-d` for real-number behavior. |
 | 8 | **Under `-d`, trailing zeros in a fraction tie**: `1.5` == `1.50` | Trailing zeros are not significant; the CLI tie-breaks on raw bytes. |
 | 9 | **Only ASCII, fullwidth, and Mathematical Alphanumeric digits are folded** | `0`-`9`, `０`-`９` (U+FF10..FF19), and U+1D7CE..1D7FF (bold, double-struck, sans-serif, sans-serif bold, monospace) all participate in natural-numeric ordering, and a single run may mix them. Other Unicode `Nd` forms (Arabic-Indic `٠`-`٩`, Devanagari `०`-`९`, …) still fall to `CLASS_OTHER`. Folded forms stay distinguishable from ASCII at the secondary level, so `1` < `１` rather than tying. |
-| 9b | **An exponent's digits must be ASCII** | `1e１0` does not read the fullwidth `１` as part of the exponent. Mantissa and integer digits fold; the exponent scanner does not. |
+| 9b | **Exponents use the same folded digit forms as mantissas** | ASCII, fullwidth, and Mathematical Alphanumeric digits work in exponents. Exponent width is arbitrary; normalization uses checked machine arithmetic for small exponents and linear decimal addition/subtraction for larger ones. |
 | 10 | **Theoretical length bound** | The long-form length uses at most 8 base-254 bytes, i.e. up to 254⁸ significant digits. Reaching it requires more input than can physically exist, but it is a bound rather than true infinity. |
 
 ## Where the tests live
