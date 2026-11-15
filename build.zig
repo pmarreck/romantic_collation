@@ -107,6 +107,13 @@ pub fn build(b: *std.Build) void {
     const abi_test = b.addRunArtifact(b.addExecutable(.{ .name = "ffi-contract-test", .root_module = abi_mod }));
     b.step("abi-test", "Exercise the public C ABI from a separate consumer").dependOn(&abi_test.step);
 
+    const arena_mod = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true });
+    arena_mod.addCSourceFile(.{ .file = b.path("tests/unit/cli_key_arena.c"), .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" } });
+    arena_mod.addIncludePath(b.path("include"));
+    arena_mod.linkLibrary(lib);
+    const arena_test = b.addRunArtifact(b.addExecutable(.{ .name = "cli-key-arena-test", .root_module = arena_mod }));
+    b.step("arena-test", "Verify packed key memory and pointer lifetime").dependOn(&arena_test.step);
+
     // ─── Property fuzzer ─────────────────────────────────────────────────
     // Checks the ORDERING laws (key-order == compare-order, reflexivity,
     // antisymmetry, transitivity, C-safe keys) rather than merely "does it

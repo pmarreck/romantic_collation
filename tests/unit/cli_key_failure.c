@@ -24,8 +24,9 @@ int main(void) {
 	uint8_t *key = (uint8_t *)(uintptr_t)1;
 	size_t key_len = 99;
 	rcol_status status = RCOL_OK;
+	key_arena arena = {0};
 
-	if (build_sort_key(zero_sort_key, NULL, (const uint8_t *)"x", 1,
+	if (arena_build_key(&arena, zero_sort_key, NULL, (const uint8_t *)"x", 1,
 			&key, &key_len, &status) == SORT_KEY_BUILD_FAILED
 		&& key == NULL && key_len == 0) {
 		passed++;
@@ -36,14 +37,14 @@ int main(void) {
 	rcol_config config = RCOL_CONFIG_INIT(0);
 	rcol_collator *coll = NULL;
 	if (rcol_open(&config, &coll) == RCOL_OK && coll != NULL
-		&& build_sort_key(rcol_sort_key_utf8, coll, (const uint8_t *)"", 0,
+		&& arena_build_key(&arena, rcol_sort_key_utf8, coll, (const uint8_t *)"", 0,
 			&key, &key_len, &status) == SORT_KEY_OK
 		&& key != NULL && key_len > 0) {
 		passed++;
 	} else {
 		failed++;
 	}
-	free(key);
+	arena_deinit(&arena);
 	if (coll != NULL) rcol_close(coll);
 
 	row_t row = {

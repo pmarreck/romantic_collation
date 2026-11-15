@@ -714,6 +714,10 @@ static int read_all(FILE *f, const char *name, uint8_t **out_buf, size_t *out_le
             break; /* EOF */
         }
     }
+    if (len < cap) {
+        uint8_t *compact = (uint8_t *)realloc(buf, len ? len : 1);
+        if (compact) buf = compact;
+    }
     *out_buf = buf;
     *out_len = len;
     return 0;
@@ -722,7 +726,7 @@ static int read_all(FILE *f, const char *name, uint8_t **out_buf, size_t *out_le
 typedef struct {
     const uint8_t *line; /* points into the input buffer (not NUL-terminated) */
     size_t line_len;
-    uint8_t *key; /* owned sort key */
+    uint8_t *key; /* borrowed from the sort's stable packed key arena */
     size_t key_len;
 } row_t;
 
@@ -735,9 +739,43 @@ typedef enum {
     SORT_KEY_BUILD_FAILED,
 } sort_key_status;
 
-/* Build one owned key and reject the FFI's zero-length failure sentinel. The
- * injected function keeps this adapter error path mechanically testable. */
-static sort_key_status build_sort_key(sort_key_fn get_sort_key,
+typedef struct key_page {
+    struct key_page *next;
+    size_t used, capacity;
+    uint8_t bytes[];
+} key_page;
+
+typedef struct {
+    key_page *head;
+    size_t key_bytes, reserved_bytes;
+} key_arena;
+
+enum { KEY_PAGE_BYTES = 65536 };
+
+/* Pages never move, so qsort may retain key pointers while later pages grow. */
+static int arena_reserve(key_arena *arena, size_t need) {
+    size_t cap = need > KEY_PAGE_BYTES ? need : KEY_PAGE_BYTES;
+    if (cap > SIZE_MAX - sizeof(key_page) || arena->reserved_bytes > SIZE_MAX - cap) return -1;
+    key_page *page = (key_page *)malloc(sizeof(key_page) + cap);
+    if (!page) return -1;
+    *page = (key_page){ .next = arena->head, .used = 0, .capacity = cap };
+    arena->head = page;
+    arena->reserved_bytes += cap;
+    return 0;
+}
+
+static void arena_deinit(key_arena *arena) {
+    while (arena->head) {
+        key_page *next = arena->head->next;
+        free(arena->head);
+        arena->head = next;
+    }
+    *arena = (key_arena){0};
+}
+
+/* Build directly into spare page space, committing only the returned length.
+ * The injected ABI preserves error-path tests without per-row allocations. */
+static sort_key_status arena_build_key(key_arena *arena, sort_key_fn get_sort_key,
                                       const rcol_collator *coll,
                                       const uint8_t *src, size_t src_len,
                                       uint8_t **out_key, size_t *out_len,
@@ -745,57 +783,49 @@ static sort_key_status build_sort_key(sort_key_fn get_sort_key,
     *out_key = NULL;
     *out_len = 0;
     *out_status = RCOL_OK;
-    if (src_len > (SIZE_MAX - 16) / 6) return SORT_KEY_ALLOC_FAILED;
-
-    size_t cap = src_len * 6 + 16;
-    uint8_t *key = (uint8_t *)malloc(cap);
-    if (!key) return SORT_KEY_ALLOC_FAILED;
+    if ((!arena->head || arena->head->used == arena->head->capacity) && arena_reserve(arena, 1) != 0)
+        return SORT_KEY_ALLOC_FAILED;
+    size_t cap = arena->head->capacity - arena->head->used;
+    uint8_t *key = arena->head->bytes + arena->head->used;
 
     size_t need = 0;
     rcol_status status = get_sort_key(coll, src, src_len, key, cap, &need);
     if (status != RCOL_OK && status != RCOL_BUFFER_TOO_SMALL) {
         *out_status = status;
-        free(key);
         return SORT_KEY_BUILD_FAILED;
     }
     if (status == RCOL_OK && (need == 0 || need > cap)) {
-        free(key);
         return SORT_KEY_BUILD_FAILED;
     }
     if (status == RCOL_BUFFER_TOO_SMALL) {
         if (need <= cap) {
-            free(key);
             return SORT_KEY_BUILD_FAILED;
         }
-        uint8_t *grown = (uint8_t *)realloc(key, need);
-        if (!grown) {
-            free(key);
-            return SORT_KEY_ALLOC_FAILED;
-        }
-        key = grown;
-        cap = need;
+        if (arena_reserve(arena, need) != 0) return SORT_KEY_ALLOC_FAILED;
+        key = arena->head->bytes;
+        cap = arena->head->capacity;
         status = get_sort_key(coll, src, src_len, key, cap, &need);
-        if (status != RCOL_OK || need > cap) {
+        if (status != RCOL_OK || need == 0 || need > cap) {
             *out_status = status;
-            free(key);
             return SORT_KEY_BUILD_FAILED;
         }
     }
 
+    arena->head->used += need;
+    arena->key_bytes += need;
     *out_key = key;
     *out_len = need;
     return SORT_KEY_OK;
 }
 
 /* Drop rows whose sort key equals the previous kept row. `rows` must already
- * be ordered by key. Frees the dropped keys. Returns the kept count. */
+ * be ordered by key. Keys remain owned by the arena. Returns the kept count. */
 static size_t unique_rows(row_t *rows, size_t count) {
     if (count == 0) return 0;
     size_t kept = 1;
     for (size_t i = 1; i < count; i++) {
         if (rows[i].key_len == rows[kept - 1].key_len
             && memcmp(rows[i].key, rows[kept - 1].key, rows[i].key_len) == 0) {
-            free(rows[i].key);
             rows[i].key = NULL;
             continue;
         }
@@ -970,6 +1000,7 @@ static int cmd_sort(const char *path, uint32_t options,
         return 1;
     }
     size_t idx = 0;
+    key_arena arena = {0};
     size_t start = 0;
     int exit_code = 0;
     for (size_t i = 0; i <= data_len; i++) {
@@ -989,8 +1020,8 @@ static int cmd_sort(const char *path, uint32_t options,
             uint8_t *key;
             size_t need;
             rcol_status ffi_status;
-            sort_key_status key_status = build_sort_key(
-                rcol_sort_key_utf8, coll, ksrc, ksrc_len, &key, &need,
+            sort_key_status key_status = arena_build_key(
+                &arena, rcol_sort_key_utf8, coll, ksrc, ksrc_len, &key, &need,
                 &ffi_status);
             if (key_status != SORT_KEY_OK) {
                 exit_code = 1;
@@ -1042,7 +1073,7 @@ static int cmd_sort(const char *path, uint32_t options,
                 out_name, strerror(errno));
     }
 
-    for (size_t k = 0; k < idx; k++) free(rows[k].key);
+    arena_deinit(&arena);
     rcol_close(coll);
     free(rows);
     free(data);

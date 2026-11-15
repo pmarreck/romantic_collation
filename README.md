@@ -112,6 +112,13 @@ and a module compiled for its server major. Full setup and migration guidance:
 
 ## CLI
 
+Sort keys are packed into stable pages instead of reserving a separate
+overestimated allocation for every row. On a one-million-line workload this
+reduced peak RSS from 307 MiB to 169 MiB (45%), with byte-identical output.
+The CLI remains an in-memory sort: input, row metadata, and actual key bytes
+still grow linearly with the dataset. These are whole-process RSS measurements,
+not an assertion that the allocator returns every freed page to the OS.
+
 ```sh
 collate [OPTIONS] [FILE]      # sorts lines from FILE (or stdin) to stdout
 
