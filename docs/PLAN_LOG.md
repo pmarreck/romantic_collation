@@ -57,3 +57,11 @@ Completed PLAN.md items retired by plan-retire, oldest retirement first.
 - [x] [Open follow-ups] **Finish the leftover Grok product recommendations.** The eight warnings and the advisories were already landed. This pass added trailing-CR stripping, `-r`/`-u`/`-o` (file, `-`, `@stdout`, `@stderr`), and tests that lock ill-formed UTF-8 (a bad byte is not the Latin-1 letter with the same number) plus the ASCII-only expansion contract. `./test`: 391 passed. Not in scope: early-exit streaming compare, splitting `src/collation.zig`, wiring the reserved option bits, or a wall-clock `./bm` gate. (2026-08-27 14:30 EDT)
 - [x] [Library polish] Critique current contracts, implementation, tests, and database suitability; five verified findings, fixes, and adoption gotchas recorded in CODE_REVIEW.md (done 2026-11-14 10:57 EST; baseline a1eab7e).
 - [x] [Library polish] Upgrade the Nix-pinned compiler from Zig 0.16.0 to stable 0.17.1; safe tests, optimized artifacts, and five targets qualified as documented (done 2026-11-14 10:57 EST; commit c2f04f2).
+
+## Retired 2026-11-15
+
+- [x] [Library polish] Eliminate code-point key temporary allocations; retain key bytes for unaffected modes, reject the unproven house-style scratch candidate, and report timing uncertainty (done 2026-11-14 10:57 EST; commit c2f04f2).
+- [x] [Library polish] Fix scientific exponent cutoff and equivalent mantissas; independent i128 normalization sweep and database regressions pass (done 2026-11-14 10:57 EST; commit c2f04f2).
+- [x] [Library polish] Add loadable SQLite/PostgreSQL extensions; 30 real-engine checks and installed C ABI consumer pass (done 2026-11-14 10:57 EST; commit c2f04f2).
+- [x] [Library polish] Document new features, SQL examples, limits, and index migration in README, database guide, C header, and all eight help catalogs (done 2026-11-14 10:57 EST; commit c2f04f2).
+- [x] [Library polish] Qualify 443 tests, 200k fuzz iterations, the complexity gate, and five target builds; final push and CI evidence are recorded by Git and the CI service (done 2026-11-14 10:57 EST; commit c2f04f2).

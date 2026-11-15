@@ -43,6 +43,18 @@ any consumer ──► C FFI (rcol_*) ──► pure Zig core (no I/O)
 - **C CLI** (`cli/main.c`): the `collate` command, which calls *through* the FFI
   (not the Zig core directly) so the FFI boundary is exercised.
 
+The Zig implementation is the ordering oracle, by explicit owner decision.
+An independent Rust core (`rust/`) exposes the same checked C ABI and a native
+Rust API. Parity failures require investigating Rust, not redefining Zig to fit
+the port. The C CLI is separately packaged over either backend and runs the same
+acceptance suite. `CANONICAL_IMPL` retains Zig as the default.
+
+Elixir uses the Rust core through a small dirty-CPU NIF adapter, with precomputed
+batch keys and stable sorting. Database extensions retain the Zig core and
+versioned key functions. Equal keys can represent different byte strings;
+disclosing that equivalence, not removing it, is the accepted contract.
+See [README.md](README.md) for build, deployment, and qualification limits.
+
 ## Terminology
 
 - **Sort key** (a.k.a. collation key / weight string): a binary string derived

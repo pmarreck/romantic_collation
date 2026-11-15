@@ -164,6 +164,9 @@ the build machine, not necessarily on the deployment machine: package the Mix
 release and its native shared-library dependencies for the deployment target.
 For a prebuilt NIF, set `ROMANTIC_COLLATION_NIF` to its absolute path **without**
 the `.so` suffix while building/loading. `nix build .#elixir-nif` produces it.
+The packaged module declares NIF API 2.17 (ERTS 14.0 minimum); the runtime must
+accept that ABI and the artifact's native dependencies. Runtime tests currently
+use OTP 28.5.0.3. The pinned `nix develop` shell supplies the tested Elixir/OTP pair.
 
 ```elixir
 RomanticCollation.sort(["file10", "file2"]) # ["file2", "file10"]

@@ -84,3 +84,45 @@ gate for the new wide-exponent path. Its decimal loops are linear by inspection.
 ## Verification limits
 
 No production databases or user data are in scope. Database qualification must use disposable real-engine instances, indexed-versus-unindexed agreement, NULLs, embedded NULs where supported, option errors, and long inputs. Native foreign-platform runtime tests require suitable runners.
+
+## Follow-up qualification, 2026-11-15
+
+Commits `036b246` and `f652b03` retain Zig as the ordering oracle and default.
+Zig 0.17.1 is already the latest stable release; the new independent Rust core
+uses stable Rust 1.100.0. Both implement ordering revision 1. The full suite
+passes 2,732 checks, including public consumers of both installed C ABIs and the
+same CLI acceptance cases. A separate ABI-loaded differential consumer matches
+5,102,976 key cases, including every code point in Roman boundary contexts,
+all 128 option masks, malformed bytes, embedded NULs, and long numbers. Shared
+Unicode tables are generated data, not shared tokenizer/encoder logic. This
+does not replace the independent Unicode/arithmetic checks or prove all inputs.
+
+CLI keys now occupy stable packed pages. A deterministic million-line corpus
+reduced whole-process peak RSS from 314,368 to 173,056 KiB, about 45%, with
+byte-identical output. Resource tests assert page capacity and pointer lifetime.
+The sorter still retains the input, row records, and keys; it is not bounded
+memory and does not spill to disk. No new SIMD claim is made.
+
+Both existing row-scaling gates pass at 25k/50k/100k/200k lines: Zig ratios
+1.872, 1.992, 2.023; Rust ratios 1.829, 1.931, 2.062. These are finite legacy
+CLI-growth experiments on a shared host, not proofs, string-length gates, or
+qualified one-core/twelve-core throughput comparisons. Fixed-workload timings
+remain separate non-blocking telemetry.
+
+Additional adoption limits:
+
+- Rust house-style comparison currently allocates keys on the heap, while Zig
+  has its small scratch fast path. Precompute keys for repeated comparisons.
+- Rust brings its standard runtime and a larger native artifact. The current
+  Rust CLI uses GNU libc/Nix dependencies; only Zig's Linux CLI is static musl.
+- Elixir calls use dirty CPU schedulers and immutable handles. Large batches
+  can occupy a dirty scheduler and use substantial memory. Native defects can
+  still crash the VM; dirty scheduling is not a crash-isolation boundary.
+- Rust panics become checked internal errors rather than unwinding across C.
+  Stack exhaustion and invalid pointers remain outside the recovery contract.
+- Zig's Roman parser accepts repeated `M` above 3,999 within its 15-byte token
+  limit. An old source comment claims a stricter range than the implementation.
+  Rust preserves the oracle's behavior. Tightening this needs a separate
+  ordering-revision decision, not a silent port correction.
+- Linux amd64 ran natively. The four other Zig targets compiled; Rust/NIF
+  foreign runtime execution and hot NIF upgrades are not qualified.
