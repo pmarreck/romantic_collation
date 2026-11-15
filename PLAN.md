@@ -4,7 +4,7 @@ Completed work is preserved in [the log](docs/PLAN_LOG.md). Earlier design ideas
 
 ## Library polish
 
-- [ ] Push the polish commits and verify exact-commit Mechatron CI and the dynamic README badge before reporting shipped.
+- [x] Push the polish commits and verify exact-commit Mechatron CI and the dynamic README badge. Answer: origin/yolo equals 9fa299f; all six targets passed and both the badge endpoint and README image report PASSING (done 2026-11-15 17:19 EST; commit 9fa299f).
 - [x] Keep collation equality as disclosed behavior without changing ordering revision 1; SQL and Elixir equality remain distinct from byte identity (done 2026-11-15 17:07 EST; commit f652b03).
 - [x] Reduce CLI peak memory from 314368 to 173056 KiB on one million lines with identical output; stable-page resource and error regressions pass (done 2026-11-15 17:07 EST; commit 036b246).
 - [x] Verify the latest stable Zig release. Answer: You confirmed keeping stable 0.17.1; it is already pinned and remains the oracle, not the 0.18 development compiler (done 2026-11-15 17:12 EST; commit f652b03).
