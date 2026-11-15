@@ -1,10 +1,92 @@
 #!/usr/bin/env bash
-# Nix builds and retains the complete package. No host compiler fallback.
+# Backend selection names the core; both routes use the same C ABI frontend.
 set -u
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
-package=default
-if [[ "${1:-}" == --debug ]]; then
-	package=debug
-	shift
+die() { echo "build: $*" >&2; exit 1; }
+registered() { [[ $1 == zig || $1 == rust ]]; }
+if [[ ${1:-} == canonize ]]; then
+	[[ $# == 2 ]] && registered "$2" || die 'usage: ./build canonize zig|rust'
+	if ! cmp -s CANONICAL_IMPL <(printf '%s\n' "$2"); then
+		temporary=$(mktemp .canonical.XXXXXX) || exit 1
+		printf '%s\n' "$2" > "$temporary" && mv "$temporary" CANONICAL_IMPL || exit 1
+	fi
+	printf '%s implementation canonized. Rerun ./build to rebuild.\n' "$2"
+	exit 0
 fi
-exec nix build ".#$package" --out-link result "$@"
+[[ -f CANONICAL_IMPL ]] || die 'missing CANONICAL_IMPL; run ./build canonize zig|rust'
+canonical=$(<CANONICAL_IMPL)
+registered "$canonical" || die 'invalid CANONICAL_IMPL; expected zig or rust'
+cmp -s CANONICAL_IMPL <(printf '%s' "$canonical") || cmp -s CANONICAL_IMPL <(printf '%s\n' "$canonical") || die 'CANONICAL_IMPL must contain exactly one identifier'
+implementation=$canonical
+all_impls=0; all_plats=0; profile=release
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		--all) all_impls=1; all_plats=1 ;;
+		--all-impls|--all-implementations) all_impls=1 ;;
+		--all-plats|--all-platforms) all_plats=1 ;;
+		--debug) profile=debug ;;
+		--impl) shift; [[ $# -gt 0 ]] && registered "$1" || die '--impl needs zig or rust'; implementation=$1 ;;
+		--help|-h) echo 'Usage: ./build [--impl zig|rust] [--debug] [--all-impls] [--all-plats] [--all]'; echo './build canonize zig|rust records the default without building.'; exit 0 ;;
+		*) die "unknown option: $1" ;;
+	esac
+	shift
+done
+command -v nix >/dev/null || die 'Nix is required; no direct compiler fallback'
+case $(uname -s) in Linux) os=linux ;; Darwin) os=macos ;; *) die 'unsupported build host' ;; esac
+case $(uname -m) in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) die 'unsupported architecture' ;; esac
+host_pf=$os-$arch
+mkdir .build-publication-lock 2>/dev/null || die 'another publication is active; inspect .build-publication-lock'
+trap 'for link in .build-publication-lock/*; do [[ ! -L $link ]] || unlink "$link"; done; rmdir .build-publication-lock' EXIT
+publication=
+selected=0
+products=(); artifacts=()
+while read -r backend pf variant release_package debug_package; do
+	[[ -n $backend && $backend != \#* ]] || continue
+	[[ $all_impls == 1 || $backend == "$implementation" ]] || continue
+	[[ $all_plats == 1 || $pf == "$host_pf" ]] || continue
+	selected=$((selected+1))
+	package=$release_package
+	[[ $profile != debug ]] || package=$debug_package
+	prefix="$backend-out/$pf"
+	[[ $variant == - ]] || prefix="$prefix/$variant"
+	# Never follow a user-created directory symlink into another tree/store.
+	for parent in "$backend-out" "$backend-out/$pf" "$prefix"; do
+		[[ ! -L $parent ]] || die "output parent is a symlink: $parent"
+	done
+	mkdir -p "$prefix" || exit 1
+	product="$prefix/$profile"
+	[[ ! -e $product || -L $product ]] || die "unmanaged output: $product"
+	staging=".build-publication-lock/product-$selected"
+	nix build ".#$package" --out-link "$staging" || exit $?
+	products+=("$product"); artifacts+=("$(readlink "$staging")")
+	command_name=collate; [[ $pf != mswin-* ]] || command_name=collate.exe
+	[[ -x $staging/bin/$command_name ]] || die "missing command in $product"
+	if [[ $pf == "$host_pf" ]]; then
+		about=$("$staging/bin/$command_name" --about) || die 'built command failed verification'
+		[[ $about == *"PF=$pf"* ]] || die "wrong-platform artifact: $about"
+		[[ $variant == - || $about == *"VARIANT=$variant"* ]] || die "wrong ABI variant: $about"
+		[[ $backend != "$canonical" ]] || publication=$product
+	fi
+done < build-targets.tsv
+[[ $selected -gt 0 ]] || die "no declared $implementation product for $host_pf"
+if [[ -n $publication ]]; then
+	[[ ! -L bin && ! -L bin/$host_pf ]] || die 'publication parent is a symlink'
+	mkdir -p "bin/$host_pf" || exit 1
+	for target in "bin/$host_pf/collate" result; do
+		[[ ! -e $target || -L $target ]] || die "refusing to replace unmanaged $target"
+	done
+	[[ ! -L bin/$host_pf/collate || $(readlink "bin/$host_pf/collate") == '../../result/bin/collate' ]] || die 'unmanaged command symlink'
+	# GNU mv gives atomic no-directory-following replacement on both hosts.
+	nix build .#build-tools --out-link .build-publication-lock/tools || exit $?
+fi
+for index in "${!products[@]}"; do
+	# Register final paths as GC roots; renaming a Nix out-link would orphan it.
+	nix-store --add-root "${products[$index]}" --realise "${artifacts[$index]}" >/dev/null || exit $?
+done
+if [[ -n $publication ]]; then
+	# Both targets resolve through one atomic selection, preserving the prior
+	# publication if any required build or verification above failed.
+	if [[ ! -L bin/$host_pf/collate ]]; then ln -s '../../result/bin/collate' "bin/$host_pf/collate" || exit 1; fi
+	ln -s "$publication" .build-publication-lock/result || exit 1
+	.build-publication-lock/tools/bin/mv -Tf .build-publication-lock/result result || exit 1
+fi

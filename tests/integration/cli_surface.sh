@@ -8,8 +8,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CLI="$REPO_ROOT/zig-out/bin/collate"
-[[ -x "$CLI" ]] || CLI="$REPO_ROOT/result/bin/collate"
+CLI="${COLLATE_CLI:-$REPO_ROOT/zig-out/bin/collate}"
+if [[ -z "${COLLATE_CLI:-}" && ! -x "$CLI" ]]; then CLI="$REPO_ROOT/result/bin/collate"; fi
 
 if [[ ! -x "$CLI" ]]; then
 	echo "FAIL: CLI not built (looked in zig-out/bin and result/bin); run ./build" >&2
@@ -36,6 +36,13 @@ if [[ "$out" == collate\ 0.1.0\ * && $(printf '%s' "$out" | wc -l) -eq 0 ]]; the
 else
 	fail "--about got '$out'"
 fi
+about=$out
+out=$(OS=wrong ARCH=wrong PF=wrong VARIANT=wrong "$CLI" --about 2>/dev/null)
+if [[ $out == "$about" && $out =~ PF=(linux|macos|mswin)-(amd64|arm64) ]]; then
+	pass 'compiled platform identity ignores runtime environment'
+else
+	fail 'invalid or mutable PF identity'
+fi
 
 # ── -h / --help ──
 if "$CLI" --help 2>/dev/null | grep -q "structural-first"; then
@@ -51,6 +58,11 @@ for lang in en de fr es it pt_br ca ro; do
 		pass "database help is discoverable in $lang"
 	else
 		fail "database help missing in $lang"
+	fi
+	if [[ $out == *Rust* && $out == *Elixir* && $out == *NIF* && $out == *README.md* ]]; then
+		pass "Rust and Elixir help is discoverable in $lang"
+	else
+		fail "Rust and Elixir help missing in $lang"
 	fi
 done
 

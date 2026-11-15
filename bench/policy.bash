@@ -5,6 +5,14 @@ readonly COMPLEXITY_RATIO_MIN="1.5"
 readonly COMPLEXITY_RATIO_MAX="3.0"
 readonly COMPLEXITY_WORK_TO_STARTUP_MIN="5.0"
 
+benchmark_package() {
+	case $1 in
+		zig) echo default ;;
+		rust) echo rust-cli ;;
+		*) echo 'benchmark: expected BM_IMPL=zig|rust' >&2; return 1 ;;
+	esac
+}
+
 # Classify one per-doubling ratio against the agreed half-open gate [1.5, 3.0).
 complexity_ratio_verdict() {
 	local ratio="$1"

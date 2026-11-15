@@ -38,3 +38,16 @@ CLAUDE*.md
 
 # session handoff docs (skill: handoff)
 HANDOFF*
+
+# Cargo and Mix products; Nix packages remain the canonical build artifacts.
+rust/target/
+_build/
+deps/
+priv/romantic_nif.*
+rust-out/
+bin/linux-amd64/
+bin/linux-arm64/
+bin/macos-arm64/
+bin/mswin-amd64/
+bin/mswin-arm64/
+.build-publication-lock/

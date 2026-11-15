@@ -29,20 +29,35 @@
 
 #if defined(__aarch64__) || defined(_M_ARM64)
 #define RCOL_ARCH "aarch64"
+#define RCOL_PF_ARCH "arm64"
 #elif defined(__x86_64__) || defined(_M_X64)
 #define RCOL_ARCH "x86_64"
+#define RCOL_PF_ARCH "amd64"
 #else
 #define RCOL_ARCH "unknown"
+#define RCOL_PF_ARCH "unknown"
 #endif
 
 #if defined(__APPLE__)
 #define RCOL_OS "macos"
+#define RCOL_PF_OS "macos"
 #elif defined(__linux__)
 #define RCOL_OS "linux"
+#define RCOL_PF_OS "linux"
 #elif defined(_WIN32)
 #define RCOL_OS "windows"
+#define RCOL_PF_OS "mswin"
 #else
 #define RCOL_OS "unknown"
+#define RCOL_PF_OS "unknown"
+#endif
+
+#if defined(__linux__) && defined(__GLIBC__)
+#define RCOL_VARIANT " VARIANT=gnu"
+#elif defined(__linux__)
+#define RCOL_VARIANT " VARIANT=musl"
+#else
+#define RCOL_VARIANT ""
 #endif
 
 static void announce_debug_build(void) {
@@ -91,7 +106,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Returns indexable binary keys; options match the C ABI.\n"
         "  Build: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Setup, equality, index upgrades: docs/DATABASES.md\n",
+        "  Setup, equality, index upgrades: docs/DATABASES.md\n"
+        "\nZig ordering oracle; independent Rust core; Rust-backed Elixir NIF.\n"
+        "  Usage/builds: README.md. CLI keys are packed; sorting stays in memory.\n"
+        "  Collation equality is not byte identity.\n",
         "collate — fast, opinionated, reproducible, locale-free line sort\n"
         "\n"
         "Usage:\n"
@@ -153,7 +171,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Indizierbare binäre Schlüssel; Optionen wie in der C-ABI.\n"
         "  Build: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Einrichtung und Indexmigration: docs/DATABASES.md\n",
+        "  Einrichtung und Indexmigration: docs/DATABASES.md\n"
+        "\nZig als Ordnungsreferenz; unabhängiger Rust-Kern; Elixir-NIF mit Rust.\n"
+        "  Nutzung/Builds: README.md. Gepackte Schlüssel; Sortierung im Speicher.\n"
+        "  Kollationsgleichheit ist keine Byte-Identität.\n",
         "collate — schnelle, eigensinnige, reproduzierbare Zeilensortierung ohne Gebietsschema\n"
         "\n"
         "Verwendung:\n"
@@ -209,7 +230,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Clés binaires indexables ; options de l’ABI C.\n"
         "  Compilation : nix build .#sqlite-extension .#postgres-extension\n"
-        "  Installation et migration des index : docs/DATABASES.md\n",
+        "  Installation et migration des index : docs/DATABASES.md\n"
+        "\nZig reste la référence ; moteur Rust indépendant ; NIF Elixir en Rust.\n"
+        "  Usage et compilation : README.md. Clés compactes ; tri en mémoire.\n"
+        "  L’égalité de collation n’est pas l’identité des octets.\n",
         "collate — tri de lignes rapide, assumé, reproductible, sans paramètres régionaux\n"
         "\n"
         "Utilisation :\n"
@@ -271,7 +295,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Claves binarias indexables; opciones de la ABI C.\n"
         "  Compilar: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Instalación y migración de índices: docs/DATABASES.md\n",
+        "  Instalación y migración de índices: docs/DATABASES.md\n"
+        "\nZig es la referencia; núcleo Rust independiente; NIF Elixir con Rust.\n"
+        "  Uso y compilación: README.md. Claves compactas; ordenación en memoria.\n"
+        "  La igualdad de colación no implica identidad de bytes.\n",
         "collate — ordenación de líneas rápida, con criterio propio, reproducible y sin configuración regional\n"
         "\n"
         "Uso:\n"
@@ -333,7 +360,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Chiavi binarie indicizzabili; opzioni dell’ABI C.\n"
         "  Compilazione: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Installazione e migrazione degli indici: docs/DATABASES.md\n",
+        "  Installazione e migrazione degli indici: docs/DATABASES.md\n"
+        "\nZig resta il riferimento; nucleo Rust indipendente; NIF Elixir con Rust.\n"
+        "  Uso e compilazione: README.md. Chiavi compatte; ordinamento in memoria.\n"
+        "  L’uguaglianza di collazione non implica identità dei byte.\n",
         "collate — ordinamento di righe rapido, con criterio proprio, riproducibile e indipendente dalla locale\n"
         "\n"
         "Uso:\n"
@@ -395,7 +425,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Chaves binárias indexáveis; opções da ABI C.\n"
         "  Compilar: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Instalação e migração de índices: docs/DATABASES.md\n",
+        "  Instalação e migração de índices: docs/DATABASES.md\n"
+        "\nZig é a referência; núcleo Rust independente; NIF Elixir com Rust.\n"
+        "  Uso e compilação: README.md. Chaves compactas; ordenação em memória.\n"
+        "  Igualdade de colação não implica identidade dos bytes.\n",
         "collate — ordenação de linhas rápida, com critério próprio, reproduzível e independente da configuração regional\n"
         "\n"
         "Uso:\n"
@@ -457,7 +490,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Claus binàries indexables; opcions de l’ABI C.\n"
         "  Compilació: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Instal·lació i migració d’índexs: docs/DATABASES.md\n",
+        "  Instal·lació i migració d’índexs: docs/DATABASES.md\n"
+        "\nZig és la referència; nucli Rust independent; NIF Elixir amb Rust.\n"
+        "  Ús i compilació: README.md. Claus compactes; ordenació en memòria.\n"
+        "  La igualtat de col·lació no implica identitat dels bytes.\n",
         "collate — ordenació de línies ràpida, amb criteri propi, reproduïble i sense configuració regional\n"
         "\n"
         "Ús:\n"
@@ -519,7 +555,10 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  ORDER BY romantic_key_v1(name)\n"
         "  Chei binare indexabile; opțiunile ABI-ului C.\n"
         "  Compilare: nix build .#sqlite-extension .#postgres-extension\n"
-        "  Instalare și migrarea indexurilor: docs/DATABASES.md\n",
+        "  Instalare și migrarea indexurilor: docs/DATABASES.md\n"
+        "\nZig rămâne referința; nucleu Rust independent; NIF Elixir cu Rust.\n"
+        "  Utilizare și compilare: README.md. Chei compacte; sortare în memorie.\n"
+        "  Egalitatea de colaționare nu implică identitatea octeților.\n",
         "collate — sortare de linii rapidă, cu reguli proprii, reproductibilă și fără configurare regională\n"
         "\n"
         "Utilizare:\n"
@@ -676,8 +715,9 @@ static int print_help(lang_t lang) {
 }
 
 static int print_about(lang_t lang) {
-    printf("collate %s (%s-%s) — %s\n",
-           rcol_version(), RCOL_OS, RCOL_ARCH, MESSAGES[lang].about_desc);
+    printf("collate %s (%s-%s) — %s; PF=%s-%s%s\n",
+           rcol_version(), RCOL_OS, RCOL_ARCH, MESSAGES[lang].about_desc,
+           RCOL_PF_OS, RCOL_PF_ARCH, RCOL_VARIANT);
     return 0;
 }
 

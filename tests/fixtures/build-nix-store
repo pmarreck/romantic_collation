@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -u
+[[ $# == 4 && $1 == --add-root && $3 == --realise ]] || exit 2
+ln -sfn "$4" "$2"

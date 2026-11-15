@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+echo 'collate 0.1.0; PF=linux-amd64 VARIANT=musl'

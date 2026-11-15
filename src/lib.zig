@@ -45,6 +45,7 @@ pub const Status = enum(i32) {
     buffer_too_small = 3,
     unsupported_abi = 4,
     unsupported_option = 5,
+    internal_error = 6,
 };
 
 pub const Config = extern struct {
@@ -176,6 +177,7 @@ export fn rcol_status_name(status_value: i32) callconv(.c) [*:0]const u8 {
         .buffer_too_small => "buffer too small",
         .unsupported_abi => "unsupported ABI version",
         .unsupported_option => "unsupported option",
+        .internal_error => "internal error",
     };
 }
 

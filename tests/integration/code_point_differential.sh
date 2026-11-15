@@ -8,8 +8,8 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CLI="$REPO_ROOT/zig-out/bin/collate"
-[[ -x "$CLI" ]] || CLI="$REPO_ROOT/result/bin/collate"
+CLI="${COLLATE_CLI:-$REPO_ROOT/zig-out/bin/collate}"
+if [[ -z "${COLLATE_CLI:-}" && ! -x "$CLI" ]]; then CLI="$REPO_ROOT/result/bin/collate"; fi
 
 if [[ ! -x "$CLI" ]]; then
 	echo "FAIL: CLI not built; run ./build" >&2

@@ -25,6 +25,9 @@ There is an escape hatch: `--code-point` gives you exact `LC_ALL=C sort` order.
 SQLite and PostgreSQL extensions now expose indexable binary sort keys:
 `ORDER BY romantic_key_v1(name)`. See [database setup and examples](docs/DATABASES.md).
 The compiler is pinned to Zig 0.17.1; correctness tests run with runtime safety enabled.
+Zig remains the ordering oracle. An independent, dependency-free Rust core
+(Rust 1.100.0) provides the same key bytes and checked C ABI, plus a Rust-backed
+Elixir NIF. The same CLI acceptance tests run against both backends.
 Scientific exponents now retain arbitrary precision, including normalization
 carries and negative exponents. Code-point key generation writes directly to
 the caller's buffer without a temporary allocation. Recompute any scientific-mode
@@ -72,13 +75,28 @@ In priority order:
 ## Build & test
 
 ```sh
-./build          # optimized Nix package, retained at result/
-./test           # safety-enabled unit tests, CLI tests, real database tests
+./build          # canonical Zig package; result/ and bin/<PF>/collate
+./test           # both backends, ABI/parity, Elixir, CLI, real databases
 ./build --debug  # debug Nix package
 ./result/bin/collate --help
+./build --all-impls  # both declared native routes, without changing the default
+./build --impl rust # Rust product, without changing the published command
 ```
 
-Native Linux builds are fully static (musl), so the binary runs anywhere.
+`CANONICAL_IMPL` selects the CLI backend; Zig remains the default and ordering
+oracle. `./build canonize rust` records a selection without building or switching
+the command; rerun `./build` to publish it. Use `canonize zig` to return. Native
+products coexist under `<backend>-out/<PF>/[variant]/release/` (or `debug/`).
+`--all-plats` builds the selected backend's declared platforms; `--all` combines
+both scopes. `build-targets.tsv` is the declared matrix: five Zig targets and
+currently Linux amd64 for Rust. A failed build preserves the prior publication.
+The compatibility `result/` link follows the canonical host product, and
+`bin/<PF>/collate` points to it. Direct `nix build` retains the historical Zig
+default; use the explicit Rust outputs when bypassing the selector.
+
+Zig Linux CLI builds are fully static (musl). Rust CLI builds currently use
+the host GNU libc and Nix runtime closure; they are not portable static releases.
+`--about` identifies the actual compiled `PF` and applicable libc `VARIANT`.
 
 The package includes `lib/libromantic_collation.a` and
 `include/romantic_collation.h`. Database modules use the server's native libc.
@@ -109,6 +127,59 @@ that equivalence. Keep ordering revisions/options fixed for each index; rebuild
 stored keys and indexes when migrating them. PostgreSQL needs a UTF8 database
 and a module compiled for its server major. Full setup and migration guidance:
 [docs/DATABASES.md](docs/DATABASES.md).
+
+## Rust and Elixir
+
+The Rust crate lives in `rust/` and does not call Zig. Add it as a path dependency
+when vendoring this repository:
+
+```toml
+[dependencies]
+romantic-collation = { path = "vendor/romantic_collation/rust" }
+```
+
+```rust
+use romantic_collation::{Collator, options};
+let collator = Collator::new(options::ROMAN)?;
+assert!(collator.compare(b"VII", b"IX")?.is_lt());
+let key: Vec<u8> = collator.sort_key("café".as_bytes())?;
+```
+
+Allocation errors return `Result`; arbitrary bytes, including NUL and invalid
+UTF-8, are accepted. The crate requires Rust 1.100. `nix build .#rust-library`
+packages its Rust library and checked C ABI; `nix build .#rust-cli --out-link
+result-rust` builds the existing C CLI over that ABI. Zig is still the default.
+Native execution is qualified on Linux amd64. Rust/NIF macOS and Linux arm64
+outputs are defined but are not yet runtime-qualified; Windows qualification
+currently applies only to the Zig cross-builds.
+
+For Elixir, add the repository as a Mix dependency (no Hex release yet):
+
+```elixir
+{:romantic_collation, git: "https://github.com/pmarreck/romantic_collation.git", branch: "yolo"}
+```
+
+Mix builds the Rust-backed NIF through the pinned Nix flake. Nix is required on
+the build machine, not necessarily on the deployment machine: package the Mix
+release and its native shared-library dependencies for the deployment target.
+For a prebuilt NIF, set `ROMANTIC_COLLATION_NIF` to its absolute path **without**
+the `.so` suffix while building/loading. `nix build .#elixir-nif` produces it.
+
+```elixir
+RomanticCollation.sort(["file10", "file2"]) # ["file2", "file10"]
+RomanticCollation.compare("VII", "IX", roman: true) # :lt
+RomanticCollation.keys(["café", "cafe"]) # one batch native call
+RomanticCollation.equal?("ș", "ş") # true, although "ș" != "ş"
+```
+
+Options are booleans named `code_point`, `decimal`, `decimal_comma`, `scientific`,
+and `roman`, or the C API's integer mask. Sorting precomputes keys and preserves
+input order for collation-equal values. All native computation uses dirty CPU
+schedulers. This prevents ordinary scheduler blocking, not unlimited resource
+use: large batches occupy a dirty scheduler and retain input plus keys. As with
+any NIF, a native memory-safety defect can crash the VM; use a process boundary
+for untrusted workloads requiring crash isolation. Restart the VM when replacing
+the native module; hot NIF upgrades are not supported.
 
 ## CLI
 
@@ -201,19 +272,25 @@ rcol_close(c);
 Every fallible call returns `rcol_status`; useful values use out-parameters.
 Length probes pass `out = NULL, out_cap = 0`. An undersized sort-key buffer
 returns `RCOL_BUFFER_TOO_SMALL`, reports `required`, and remains untouched.
+Rust panics are contained as `RCOL_INTERNAL_ERROR`; expected allocation failures
+return `RCOL_OUT_OF_MEMORY`. Invalid pointers, stack exhaustion, and process
+termination are outside that recovery contract. Handles and their freeing
+functions must come from the same backend, never mixed between loaded libraries.
 
 ## Benchmarks
 
 Run `./bm` (uses `hyperfine` from the dev shell). It records two deliberately
 separate streams:
 
-- `bench/<machine-id>.performance.ndjson` contains non-blocking fixed-workload
+- `bench/<machine-id>.<backend>.performance.ndjson` contains non-blocking fixed-workload
   wall-clock and CPU-time telemetry for `collate` and independent competitors.
-- `bench/<machine-id>.complexity.ndjson` contains the blocking `N, 2N, 4N, 8N`
+- `bench/<machine-id>.<backend>.complexity.ndjson` contains the blocking `N, 2N, 4N, 8N`
   growth control. Each doubling must stay in `[1.5, 3.0)`, and the smallest
   workload must take at least 5× empty-process startup time.
 
-The original combined `<machine-id>.ndjson` remains as historical data.
+`BM_IMPL=zig ./bm` and `BM_IMPL=rust ./bm` select explicit backends; the default
+is `CANONICAL_IMPL`. The original combined and backend-unqualified logs remain
+historical data. Benchmark builds do not retarget the published CLI.
 
 Measured — 50,000 realistic mixed lines, AMD Threadripper 3990X, hyperfine median:
 
@@ -312,15 +389,22 @@ virtue of being unrecognized.
   exception is Romanian `s`/`t` plus combining comma-below or cedilla, which
   canonicalizes with precomposed `ș`/`ț` and legacy `ş`/`ţ`. Full Unicode
   normalization is deferred.
-- `rcol_compare_utf8` builds temporary keys in an 8 KiB stack scratch buffer and falls
+- Zig's `rcol_compare_utf8` builds temporary keys in an 8 KiB stack scratch buffer and falls
   back to the heap for oversize inputs. Precomputing sort keys still wins when
   each string is compared many times; SIMD/streaming compare is deferred.
+  Rust currently uses fallible heap-backed keys for house-style comparisons.
+  SIMD work is deferred: this pass targeted allocation capacity and pointer
+  stability, not a measured scalar arithmetic bottleneck. Byte copies continue
+  to use the platform/runtime's optimized copy routines.
 - **Numeric caveats are enumerated in [docs/NUMERIC.md](docs/NUMERIC.md)** — in
   short: default text sort distinguishes leading zeroes, numeric modes collapse
   leading and fractional trailing zeroes, `--decimal` must not be used for
   version strings, and a sign is recognized only at the start of the collated
   string (use `-t`/`-k` to make a number a field). ASCII, fullwidth, and
   Mathematical Alphanumeric decimal digits are supported.
+- Roman mode preserves the Zig oracle's greedy round-trip grammar and 15-byte
+  token limit. It accepts repeated `M` above 3,999 (for example `MMMM`), not just
+  the conventional 1..3,999 range. It is opt-in and never infers dataset context.
 
 ## Naming
 

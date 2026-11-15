@@ -5,3 +5,5 @@ packages.x86_64-linux.default
 checks.x86_64-linux.build
 checks.x86_64-linux.test
 checks.x86_64-linux.cross
+checks.x86_64-linux.parity
+checks.x86_64-linux.elixir

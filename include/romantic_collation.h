@@ -7,7 +7,7 @@
  * string is UTF-8 bytes + length (like ICU's `ucol_strcollUTF8`), never a
  * wide/UChar buffer.
  *
- * Architecture: pure Zig core (no I/O) -> this C ABI -> C CLI that dogfoods it.
+ * Architecture: Zig oracle or independent Rust core -> this C ABI -> consumers.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -94,7 +94,10 @@ extern "C" {
 /* ── Status and comparison results ─────────────────────────────────────── */
 
 /* Fixed-width status type keeps the ABI stable across C compilers. Every
- * fallible call returns one of these; useful results use out-parameters. */
+ * fallible call returns one of these; useful results use out-parameters.
+ * Rust panics are contained and reported as RCOL_INTERNAL_ERROR; allocator
+ * exhaustion is reported as RCOL_OUT_OF_MEMORY. Process termination, stack
+ * exhaustion and contract-invalid pointers are not recoverable ABI errors. */
 typedef int32_t rcol_status;
 
 #define RCOL_OK                 ((rcol_status)0)
@@ -103,6 +106,7 @@ typedef int32_t rcol_status;
 #define RCOL_BUFFER_TOO_SMALL   ((rcol_status)3)
 #define RCOL_UNSUPPORTED_ABI    ((rcol_status)4)
 #define RCOL_UNSUPPORTED_OPTION ((rcol_status)5)
+#define RCOL_INTERNAL_ERROR     ((rcol_status)6) /* contained implementation panic */
 
 #define RCOL_LESS     (-1)
 #define RCOL_EQUAL      0

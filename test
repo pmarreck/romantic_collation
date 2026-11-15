@@ -64,16 +64,28 @@ run_suite "C CLI Adapter Unit Tests" "$c_test_cmd"
 run_suite "CLI key memory" "zig build arena-test -Doptimize=safe --summary all"
 run_suite "C ABI consumer" "zig build abi-test -Doptimize=safe --summary all"
 run_suite "Installed C ABI consumer" "cc -std=c11 -Wall -Wextra -Werror -I'$RCOL_LIBRARY/include' tests/unit/ffi_contract.c '$RCOL_LIBRARY/lib/libromantic_collation.a' -o '$SCRIPT_DIR/abi-consumer' && '$SCRIPT_DIR/abi-consumer'"
+run_suite "Rust installed C ABI consumer" "cc -std=c11 -Wall -Wextra -Werror -I'$RCOL_RUST_LIBRARY/include' tests/unit/ffi_contract.c '$RCOL_RUST_LIBRARY/lib/libromantic_collation.a' -lm -lpthread -o '$SCRIPT_DIR/abi-rust-consumer' && '$SCRIPT_DIR/abi-rust-consumer'"
+run_suite "Zig oracle / Rust key-byte parity" "'$RCOL_PARITY' '$RCOL_ZIG_SHARED' '$RCOL_RUST_SHARED'"
+run_suite "Public ABI inventory and negative control" "bash tests/unit/abi_inventory.sh"
+run_suite "Generated Rust tables" "luajit tools/gen-rust-tables generated-tables.rs && cmp rust/src/tables.rs generated-tables.rs && echo '1 passed, 0 failed'"
+run_suite "Rust-backed Elixir NIF" "cat '$RCOL_ELIXIR_LOG' && echo '7 passed, 0 failed'"
 
 # Benchmark policy is pure classification and belongs in the ordinary suite;
 # actual timing remains exclusive to ./bm.
 run_suite "Benchmark Policy Unit Tests" "bash '$SCRIPT_DIR/tests/unit/benchmark_policy.sh'"
 run_suite "Build failure propagation" "bash '$SCRIPT_DIR/tests/unit/build_failure.sh'"
+run_suite "Backend selection and isolated publication" "bash tests/unit/build_selection.sh"
 
 # Integration tests (CLI surface) — add as they're written
 for t in "$SCRIPT_DIR"/tests/integration/*.sh; do
 	[[ -f "$t" ]] || continue
-	run_suite "Integration: $(basename "$t")" "bash '$t'"
+	case $(basename "$t") in
+		database.sh|readme_translations.sh) run_suite "Integration: $(basename "$t")" "bash '$t'" ;;
+		*)
+			run_suite "Zig CLI: $(basename "$t")" "COLLATE_CLI='$RCOL_ZIG_CLI' bash '$t'"
+			run_suite "Rust CLI: $(basename "$t")" "COLLATE_CLI='$RCOL_RUST_CLI' bash '$t'"
+			;;
+	esac
 done
 
 echo ""

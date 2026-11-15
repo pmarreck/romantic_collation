@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -u
+[[ $1 == build ]] || exit 2
+printf '%s\n' "$2" >> "$FAKE_PACKAGE_ROOT/calls"
+[[ ${FAIL_PACKAGE:-} != "$2" ]] || exit 73
+[[ $3 == --out-link ]] || exit 2
+package=${2#.#}
+[[ ${MISSING_COMMAND:-} != "$2" ]] || package=missing
+ln -s "$FAKE_PACKAGE_ROOT/$package" "$4"

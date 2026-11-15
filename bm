@@ -23,6 +23,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 source "$SCRIPT_DIR/bench/policy.bash"
+BM_IMPL="${BM_IMPL:-$(<CANONICAL_IMPL)}"
+benchmark_target=$(benchmark_package "$BM_IMPL") || exit 1
 
 # Re-exec inside the dev shell if the benchmark tooling isn't on PATH.
 if ! command -v hyperfine >/dev/null 2>&1 \
@@ -40,8 +42,7 @@ BM_SCALE_BASE="${BM_SCALE_BASE:-25000}"  # scaling gate base N (uses N,2N,4N,8N)
 BM_SEED="${BM_SEED:-1234567}"
 WARMUP="${BM_WARMUP:-3}"
 
-WORK="${TMPDIR:-/tmp}/collate_bm.$$"
-mkdir -p "$WORK"
+WORK=$(mktemp -d) || exit 1
 trap 'command rm -rf "$WORK" 2>/dev/null' EXIT
 
 # ── Machine id: stable hash of hostname + arch + CPU model ────────────────
@@ -49,13 +50,17 @@ cpu_model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed 's/.*: //')
 [ -n "$cpu_model" ] || cpu_model=$(uname -m)
 machine_id=$(printf '%s|%s|%s' "$(hostname 2>/dev/null)" "$(uname -m)" "$cpu_model" \
 	| sha256sum | head -c 12)
-PERFORMANCE_NDJSON="$SCRIPT_DIR/bench/${machine_id}.performance.ndjson"
-COMPLEXITY_NDJSON="$SCRIPT_DIR/bench/${machine_id}.complexity.ndjson"
+PERFORMANCE_NDJSON="$SCRIPT_DIR/bench/${machine_id}.${BM_IMPL}.performance.ndjson"
+COMPLEXITY_NDJSON="$SCRIPT_DIR/bench/${machine_id}.${BM_IMPL}.complexity.ndjson"
 now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 os_name=$(uname -s)
 kernel_release=$(uname -r)
 architecture=$(uname -m)
-zig_version=$(zig version)
+if [[ $BM_IMPL == zig ]]; then
+	compiler_version="zig $(zig version)"; build_profile=ReleaseFast
+else
+	compiler_version=$(rustc --version); build_profile=release
+fi
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  romantic_collation benchmark — machine ${machine_id}                     "
@@ -65,12 +70,12 @@ echo "corpus N=$BM_N  seed=$BM_SEED  warmup=$WARMUP"
 
 # ── Build collate (ReleaseFast, static) ──────────────────────────────────
 echo ""
-echo "Building collate (ReleaseFast)..."
-if ! nix build; then
+echo "Building collate ($BM_IMPL, optimized)..."
+if ! nix build ".#$benchmark_target" --out-link "$WORK/product"; then
 	echo "FATAL: nix build failed" >&2
 	exit 1
 fi
-COLLATE="$SCRIPT_DIR/result/bin/collate"
+COLLATE="$WORK/product/bin/collate"
 if [ ! -x "$COLLATE" ]; then echo "FATAL: collate not built" >&2; exit 1; fi
 
 # ── Detect an available UTF-8 locale ─────────────────────────────────────
@@ -167,9 +172,9 @@ printf '%-34s %12s %12s %10s\n' "----------" "----------" "-------" "--------"
 # Ensure performance telemetry has a self-describing header.
 if [ ! -f "$PERFORMANCE_NDJSON" ]; then
 	mkdir -p "$SCRIPT_DIR/bench"
-	printf '{"_meta":"fixed-workload implementation-performance telemetry; non-blocking by default","kind":"performance","machine":"%s","cpu":%s,"os":"%s","kernel":"%s","arch":"%s","zig":"%s","build":"ReleaseFast","schema":2,"generated_by":"./bm"}\n' \
+	printf '{"_meta":"fixed-workload implementation-performance telemetry; non-blocking by default","kind":"performance","machine":"%s","cpu":%s,"os":"%s","kernel":"%s","arch":"%s","backend":"%s","compiler":"%s","build":"%s","schema":3,"generated_by":"./bm"}\n' \
 		"$machine_id" "$(printf '%s' "$cpu_model" | luajit -e 'io.write(string.format("%q", io.read("*a")))')" \
-		"$os_name" "$kernel_release" "$architecture" "$zig_version" \
+		"$os_name" "$kernel_release" "$architecture" "$BM_IMPL" "$compiler_version" "$build_profile" \
 		>> "$PERFORMANCE_NDJSON"
 fi
 for i in "${!names[@]}"; do
@@ -226,9 +231,9 @@ if [[ "$workload_verdict" == "fail" ]]; then gate_fail=1; fi
 # Ensure complexity results have their own self-describing stream.
 if [ ! -f "$COMPLEXITY_NDJSON" ]; then
 	mkdir -p "$SCRIPT_DIR/bench"
-	printf '{"_meta":"within-run algorithmic-complexity controls","kind":"complexity","machine":"%s","cpu":%s,"os":"%s","kernel":"%s","arch":"%s","zig":"%s","build":"ReleaseFast","claim":"O(n log n)","ratio_min":%s,"ratio_max_exclusive":%s,"work_to_startup_min":%s,"schema":2,"generated_by":"./bm"}\n' \
+	printf '{"_meta":"within-run algorithmic-complexity controls","kind":"complexity","machine":"%s","cpu":%s,"os":"%s","kernel":"%s","arch":"%s","backend":"%s","compiler":"%s","build":"%s","claim":"O(n log n)","ratio_min":%s,"ratio_max_exclusive":%s,"work_to_startup_min":%s,"schema":3,"generated_by":"./bm"}\n' \
 		"$machine_id" "$(printf '%s' "$cpu_model" | luajit -e 'io.write(string.format("%q", io.read("*a")))')" \
-		"$os_name" "$kernel_release" "$architecture" "$zig_version" \
+		"$os_name" "$kernel_release" "$architecture" "$BM_IMPL" "$compiler_version" "$build_profile" \
 		"$COMPLEXITY_RATIO_MIN" "$COMPLEXITY_RATIO_MAX" "$COMPLEXITY_WORK_TO_STARTUP_MIN" \
 		>> "$COMPLEXITY_NDJSON"
 fi

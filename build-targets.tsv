@@ -1,0 +1,7 @@
+# backend PF variant release-package debug-package
+zig linux-amd64 musl linux-amd64 debug
+zig linux-arm64 musl linux-arm64 linux-arm64-debug
+zig macos-arm64 - macos-arm64 macos-arm64-debug
+zig mswin-amd64 - mswin-amd64 mswin-amd64-debug
+zig mswin-arm64 - mswin-arm64 mswin-arm64-debug
+rust linux-amd64 gnu rust rust-debug

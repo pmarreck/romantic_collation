@@ -1,0 +1,18 @@
+[package]
+name = "romantic-collation"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+description = "Reproducible natural UTF-8 collation, byte-compatible with the Zig oracle"
+
+[lib]
+name = "romantic_collation"
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[profile.release]
+overflow-checks = true
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

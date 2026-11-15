@@ -8,6 +8,11 @@ source "$SCRIPT_DIR/../../bench/policy.bash"
 
 passed=0
 failed=0
+for pair in 'zig default' 'rust rust-cli'; do
+	read -r backend package <<< "$pair"
+	if [[ $(benchmark_package "$backend") == "$package" ]]; then passed=$((passed+1)); else failed=$((failed+1)); fi
+done
+if benchmark_package invalid >/dev/null 2>&1; then failed=$((failed+1)); else passed=$((passed+1)); fi
 
 ratios=(1.499 1.500 2.999 3.000)
 expected=(fail pass pass fail)
