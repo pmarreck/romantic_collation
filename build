@@ -6,7 +6,7 @@ die() { echo "build: $*" >&2; exit 1; }
 registered() { [[ $1 == zig || $1 == rust ]]; }
 if [[ ${1:-} == canonize ]]; then
 	[[ $# == 2 ]] && registered "$2" || die 'usage: ./build canonize zig|rust'
-	if ! cmp -s CANONICAL_IMPL <(printf '%s\n' "$2"); then
+	if ! cmp -s CANONICAL_IMPL <(printf '%s\n' "$2") && ! cmp -s CANONICAL_IMPL <(printf '%s' "$2"); then
 		temporary=$(mktemp .canonical.XXXXXX) || exit 1
 		printf '%s\n' "$2" > "$temporary" && mv "$temporary" CANONICAL_IMPL || exit 1
 	fi

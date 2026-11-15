@@ -40,6 +40,9 @@ old=$(readlink result)
 check success canonize rust
 check test "$(readlink result)" = "$old"
 check test "$(cat CANONICAL_IMPL)" = rust
+ln CANONICAL_IMPL "$work/persisted-selection"
+check success canonize rust
+check test CANONICAL_IMPL -ef "$work/persisted-selection"
 check success
 check test "$(readlink result)" = rust-out/linux-amd64/gnu/release
 check test -x zig-out/linux-amd64/musl/release/bin/collate
@@ -81,6 +84,9 @@ done
 check test ! -e escaped
 printf zig > CANONICAL_IMPL
 check success
+ln CANONICAL_IMPL "$work/bare-selection"
+check success canonize zig
+check test CANONICAL_IMPL -ef "$work/bare-selection"
 check rejected canonize rust --all
 check rejected --impl invalid
 check rejected --unknown
