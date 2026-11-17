@@ -2,6 +2,7 @@
  * always uses dirty schedulers; no native pointer or state escapes to Elixir. */
 #include <erl_nif.h>
 #include "romantic_collation.h"
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct { rcol_collator *coll[128]; } state;
@@ -74,9 +75,113 @@ static ERL_NIF_TERM keys(ErlNifEnv *env,int argc,const ERL_NIF_TERM argv[]) {
 	if (!enif_make_reverse_list(env,result,&reversed)) return enif_make_badarg(env);
 	return reversed;
 }
+
+typedef struct {
+	ERL_NIF_TERM input;
+	const uint8_t *key;
+	size_t key_len;
+	unsigned ordinal;
+} sort_row;
+
+/* Pack temporary keys into pages that never move. No per-key BEAM terms or
+ * copies of the input binaries are needed; the input terms remain in env. */
+typedef struct sort_page {
+	struct sort_page *next;
+	size_t used, capacity;
+	uint8_t data[];
+} sort_page;
+
+static int add_sort_page(sort_page **pages, size_t need) {
+	size_t capacity = need < 4096 ? 4096 : need;
+	if (capacity > SIZE_MAX - sizeof(sort_page)) return 0;
+	sort_page *page = enif_alloc(sizeof(*page) + capacity);
+	if (!page) return 0;
+	page->next = *pages;
+	page->used = 0;
+	page->capacity = capacity;
+	*pages = page;
+	return 1;
+}
+
+static rcol_status build_sort_key(sort_page **pages, const rcol_collator *coll,
+		const ErlNifBinary *input, sort_row *row) {
+	if ((!*pages || (*pages)->used == (*pages)->capacity) && !add_sort_page(pages, 0))
+		return RCOL_OUT_OF_MEMORY;
+	for (unsigned attempt = 0; attempt < 2; ++attempt) {
+		sort_page *page = *pages;
+		uint8_t *key = page->data + page->used;
+		size_t available = page->capacity - page->used;
+		size_t need = 0;
+		rcol_status status = rcol_sort_key_utf8(coll, input->data, input->size, key, available, &need);
+		if (status == RCOL_OK) {
+			if (need == 0 || need > available) return RCOL_INTERNAL_ERROR;
+			page->used += need;
+			row->key = key;
+			row->key_len = need;
+			return RCOL_OK;
+		}
+		if (status != RCOL_BUFFER_TOO_SMALL) return status;
+		if (attempt != 0 || need <= available) return RCOL_INTERNAL_ERROR;
+		if (!add_sort_page(pages, need)) return RCOL_OUT_OF_MEMORY;
+	}
+	return RCOL_INTERNAL_ERROR;
+}
+
+static int compare_sort_rows(const void *left, const void *right) {
+	const sort_row *a = left, *b = right;
+	size_t common = a->key_len < b->key_len ? a->key_len : b->key_len;
+	int order = memcmp(a->key, b->key, common);
+	if (order != 0) return order;
+	if (a->key_len != b->key_len) return a->key_len < b->key_len ? -1 : 1;
+	return (a->ordinal > b->ordinal) - (a->ordinal < b->ordinal);
+}
+
+static ERL_NIF_TERM sort(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+	(void)argc;
+	unsigned mask, count;
+	if (!options(env, argv[1], &mask) || !enif_get_list_length(env, argv[0], &count))
+		return enif_make_badarg(env);
+	if (count == 0) return argv[0];
+	if (sizeof(sort_row) > SIZE_MAX / count) return failure(env, RCOL_OUT_OF_MEMORY);
+	sort_row *rows = enif_alloc((size_t)count * sizeof(*rows));
+	if (!rows) return failure(env, RCOL_OUT_OF_MEMORY);
+	state *s = enif_priv_data(env);
+	sort_page *pages = NULL;
+	ERL_NIF_TERM tail = argv[0], result;
+	for (unsigned i = 0; i < count; ++i) {
+		ErlNifBinary input;
+		if (!enif_get_list_cell(env, tail, &rows[i].input, &tail) ||
+		    !enif_inspect_binary(env, rows[i].input, &input)) {
+			result = enif_make_badarg(env);
+			goto done;
+		}
+		rows[i].ordinal = i;
+		rcol_status status = build_sort_key(&pages, s->coll[mask], &input, &rows[i]);
+		if (status != RCOL_OK) {
+			result = failure(env, status);
+			goto done;
+		}
+	}
+	/* Key work is linear in total input bytes. For bounded keys, the native
+	 * sort is expected to take O(n log n) time; long common prefixes add cost. */
+	qsort(rows, count, sizeof(*rows), compare_sort_rows);
+	result = enif_make_list(env, 0);
+	for (unsigned i = count; i > 0; --i)
+		result = enif_make_list_cell(env, rows[i - 1].input, result);
+done:
+	while (pages) {
+		sort_page *next = pages->next;
+		enif_free(pages);
+		pages = next;
+	}
+	enif_free(rows);
+	return result;
+}
+
 static ErlNifFunc functions[]={
 	{"key",2,key,ERL_NIF_DIRTY_JOB_CPU_BOUND},
 	{"keys",2,keys,ERL_NIF_DIRTY_JOB_CPU_BOUND},
-	{"compare",3,compare,ERL_NIF_DIRTY_JOB_CPU_BOUND}
+	{"compare",3,compare,ERL_NIF_DIRTY_JOB_CPU_BOUND},
+	{"sort",2,sort,ERL_NIF_DIRTY_JOB_CPU_BOUND}
 };
 ERL_NIF_INIT(Elixir.RomanticCollation.Native,functions,load,NULL,NULL,unload)

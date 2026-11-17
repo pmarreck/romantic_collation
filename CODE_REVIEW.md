@@ -207,3 +207,52 @@ Native qualification remains Linux amd64, not foreign runtime execution.
 Primary references: [Unicode mixed-language FAQ](https://www.unicode.org/faq/collation.html),
 [ICU numeric attributes](https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucol_8h.html),
 and [PostgreSQL ICU collations](https://www.postgresql.org/docs/current/collation.html).
+
+## Native Elixir batch sorting, 2026-11-17
+
+`RomanticCollation.sort/2` now builds packed temporary keys through the existing
+Rust C ABI and sorts entirely on a dirty CPU scheduler. Equal keys use the
+original ordinal; the result is a new list of the original binary terms.
+There is no change to the ordering revision or public C ABI. The adapter uses
+libc `qsort` and `memcmp` (confirmed in the optimized artifact) rather than
+adding a SIMD path. For bounded-length keys the sort is expected to scale as
+O(n log n); key construction scales with input bytes and common prefixes
+affect comparison cost.
+
+The Elixir tests compare the native sorter with BEAM's stable key sort for all
+128 option masks and both input permutations, checking embedded NUL and invalid
+UTF-8 alongside valid text. The direct native test failed on the prior NIF as
+expected. Additional cases cover allocation of keys larger than a page,
+concurrent calls, and errors after accepting valid list elements.
+
+Re-ran [Kip's harness](https://github.com/elixir-localize/collation_bench/tree/ba29e29fe889038721eb8c9734fad326f6f0978c)
+with the same corpus and seed, Localize 1.8.0 and Benchee 1.5.1. Linux x86-64,
+AMD Threadripper 3990X, ICU 76.1, Elixir 1.18.4, OTP 28.5.0.3, BEAM JIT on.
+The candidate run added the previous `keys` + `Enum.zip` + `Enum.sort_by` +
+`Enum.map` path as a fourth job, with identical input and Rust key engine.
+Both paths returned exactly the same result on each of the four sort corpora.
+The ICU NIF loaded and its direct sort returned a valid result for each corpus.
+The agreement check still showed 11 disagreements with ICU across 4,000 pairs.
+
+Median wall time in ms for sorting 1,000 strings, one CPU pinned, 2 s warmup
+and 5 s sampling per job (not a CI timing gate):
+
+| Code points | Previous sort | Native sort | Localize ICU | Localize Elixir |
+| ---: | ---: | ---: | ---: | ---: |
+| 5 | 0.708 | 0.587 | 0.606 | 6.94 |
+| 10 | 1.05 | 0.86 | 0.96 | 11.28 |
+| 20 | 1.90 | 1.55 | 1.57 | 29.45 |
+| 50 | 3.33 | 3.05 | 3.31 | 50.47 |
+
+With 12 CPUs available but still one Benchee job at a time, medians in the
+same column order were 0.856/0.544/0.655/6.57, 1.36/0.87/1.01/11.41,
+2.65/1.48/1.85/20.40, and 4.71/3.10/4.23/48.41 ms. Some jobs had far higher
+variance than on one core; these numbers do not establish multicore speedup
+or an ordering of general-purpose performance across libraries.
+
+Whole-process peak RSS for one 200,000-row, 20-code-point sort, using the same
+alphabet and seed and a fresh one-core BEAM for each sample: previous
+344,748/337,884/336,024 KiB; native 199,352/199,352/199,352 KiB. This includes
+BEAM startup, corpus generation, sorting and output hashing. All six outputs
+had the same digest. These are workload-specific observations, not a leak
+test or a general ranking against ICU.

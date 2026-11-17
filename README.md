@@ -181,6 +181,8 @@ the build machine, not necessarily on the deployment machine: package the Mix
 release and its native shared-library dependencies for the deployment target.
 For a prebuilt NIF, set `ROMANTIC_COLLATION_NIF` to its absolute path **without**
 the `.so` suffix while building/loading. `nix build .#elixir-nif` produces it.
+Use the NIF built from the same revision as the Elixir module; older artifacts
+do not provide the native sort entry point.
 The packaged module declares NIF API 2.17 (ERTS 14.0 minimum); the runtime must
 accept that ABI and the artifact's native dependencies. Runtime tests currently
 use OTP 28.5.0.3. The pinned `nix develop` shell supplies the tested Elixir/OTP pair.
@@ -193,11 +195,13 @@ RomanticCollation.equal?("ș", "ş") # true, although "ș" != "ş"
 ```
 
 Options are booleans named `code_point`, `decimal`, `decimal_comma`, `scientific`,
-and `roman`, or the C API's integer mask. Sorting precomputes keys and preserves
-input order for collation-equal values. All native computation uses dirty CPU
-schedulers. This prevents ordinary scheduler blocking, not unlimited resource
-use: large batches occupy a dirty scheduler and retain input plus keys. As with
-any NIF, a native memory-safety defect can crash the VM; use a process boundary
+and `roman`, or the C API's integer mask. Sorting precomputes keys and sorts the
+entire list in one native call. It returns the original binaries in a new list,
+preserving input order for collation-equal values. Temporary sort keys do not
+become BEAM terms. All native computation uses dirty CPU schedulers. This keeps
+the sort off the ordinary schedulers, but large batches still occupy a dirty
+scheduler and retain input plus keys. As with any NIF, a native memory-safety
+defect can crash the VM; use a process boundary
 for untrusted workloads requiring crash isolation. Restart the VM when replacing
 the native module; hot NIF upgrades are not supported.
 

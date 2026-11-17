@@ -12,6 +12,7 @@ defmodule RomanticCollation.Native do
   def key(_binary, _options), do: :erlang.nif_error(:nif_not_loaded)
   def keys(_binaries, _options), do: :erlang.nif_error(:nif_not_loaded)
   def compare(_a, _b, _options), do: :erlang.nif_error(:nif_not_loaded)
+  def sort(_binaries, _options), do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule RomanticCollation do
@@ -42,13 +43,8 @@ defmodule RomanticCollation do
   @doc "Test collation equality, which can differ from binary identity."
   def equal?(a, b, options \\ []), do: compare(a, b, options) == :eq
 
-  @doc "Sort with precomputed keys. Collation-equal values retain input order."
-  def sort(binaries, options \\ []) do
-    binaries
-    |> Enum.zip(keys(binaries, options))
-    |> Enum.sort_by(&elem(&1, 1))
-    |> Enum.map(&elem(&1, 0))
-  end
+  @doc "Sort in one native call. Collation-equal values retain input order."
+  def sort(binaries, options \\ []), do: RomanticCollation.Native.sort(binaries, mask(options))
 
   defp mask(options) when is_integer(options) and options >= 0 and options < 128, do: options
 
