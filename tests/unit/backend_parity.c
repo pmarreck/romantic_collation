@@ -54,6 +54,34 @@ static void check(api *oracle,api *candidate,uint32_t mask,const uint8_t *s,size
 	}
 	cases++;
 }
+
+/* The caller may retry with an exact buffer, including a buffer that aliases
+ * the input. A length probe or undersized output must write no key bytes. */
+static void check_buffer(api *oracle,api *candidate,uint32_t mask,const uint8_t *s,size_t n) {
+	size_t need=0, reported=0;
+	uint8_t storage[1024], expected[sizeof storage];
+	if (oracle->key(oracle->handles[mask],s,n,expected,sizeof expected,&need)!=RCOL_OK ||
+		need<2 || need>=sizeof storage || n>=sizeof storage) exit(1);
+	memset(storage,0x7b,sizeof storage);
+	rcol_collator *coll=candidate->handles[mask];
+	if (candidate->key(coll,s,n,NULL,0,&reported)!=RCOL_OK || reported!=need ||
+		candidate->key(coll,s,n,storage,need-1,&reported)!=RCOL_BUFFER_TOO_SMALL || reported!=need) {
+		fprintf(stderr,"key sizing failed: options=%u length=%zu\n",mask,n);
+		exit(1);
+	}
+	for (size_t i=0;i<sizeof storage;i++) if (storage[i]!=0x7b) {
+		fprintf(stderr,"undersized key write: options=%u length=%zu offset=%zu\n",mask,n,i);
+		exit(1);
+	}
+	memcpy(storage,s,n);
+	uint8_t canary=storage[need];
+	if (candidate->key(coll,storage,n,storage,need,&reported)!=RCOL_OK ||
+		reported!=need || memcmp(storage,expected,need) || storage[need]!=canary) {
+		fprintf(stderr,"key buffer contract failed: options=%u length=%zu\n",mask,n);
+		exit(1);
+	}
+	cases++;
+}
 static uint32_t rng(uint32_t *s) { *s^=*s<<13;*s^=*s>>17;*s^=*s<<5;return *s; }
 
 int main(int argc,char **argv) {
@@ -69,6 +97,15 @@ int main(int argc,char **argv) {
 	for (uint32_t mask=0;mask<128;mask++) {
 		for (size_t i=0;i<sizeof samples/sizeof *samples;i++) check(&oracle,&candidate,mask,(const uint8_t *)samples[i],strlen(samples[i]));
 		uint8_t binary[]={0,1,127,128,255,0,'I','X'};check(&oracle,&candidate,mask,binary,sizeof binary);
+	}
+	uint8_t boundary[67];
+	for (size_t n=63;n<=65;n++) {
+		memset(boundary,'a',sizeof boundary);
+		check_buffer(&oracle,&candidate,0,boundary,n);
+		memset(boundary,'9',sizeof boundary);
+		check_buffer(&oracle,&candidate,0,boundary,n-32);
+		memcpy(boundary,"1e",2);
+		check_buffer(&oracle,&candidate,RCOL_SCIENTIFIC,boundary,n-30);
 	}
 	uint32_t state=0xc0ffee;
 	for (size_t iteration=0;iteration<5000;iteration++) {

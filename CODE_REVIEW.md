@@ -256,3 +256,45 @@ alphabet and seed and a fresh one-core BEAM for each sample: previous
 BEAM startup, corpus generation, sorting and output hashing. All six outputs
 had the same digest. These are workload-specific observations, not a leak
 test or a general ranking against ICU.
+
+### Short-key allocation follow-up
+
+Rust keeps short weight streams and digit runs inline, with fallible heap
+growth for longer inputs. The C ABI writes finished levels directly into the
+caller buffer after checking capacity, without allocating a concatenated key.
+The scan also reuses its UTF-8 decode when identifying digits. The first
+inline-buffer prototype regressed longer inputs; inspecting the optimized
+artifact showed out-of-line calls for individual weight appends. Inlining
+the appends and decoding each non-digit once recovered that loss. The sort
+still uses libc `qsort` and `memcmp`; there are no new ISA requirements.
+
+Same fixed-seed [Kip corpus](https://github.com/elixir-localize/collation_bench/tree/ba29e29fe889038721eb8c9734fad326f6f0978c),
+software and hardware as above; Rust 1.100.0 release, Benchee 2 s warmup and
+5 s sampling. Run the sort jobs in the benchmark checkout with
+`LOCALIZE_NIF=true MIX_ENV=prod mix run --no-compile bench/collation.exs`
+after preparing its dependencies, selecting each packaged `elixir-nif` with
+`ROMANTIC_COLLATION_NIF`. The prior native baseline was `3ff5864`. Each
+artifact was loaded in a separate, affinity-pinned BEAM process. The keys and
+stable sorted outputs had identical digests for all four inputs.
+
+Median wall time in ms, 1,000 strings with one CPU pinned:
+
+| Code points | Prior native | Optimized native | Localize ICU |
+| ---: | ---: | ---: | ---: |
+| 5 | 0.502 | 0.364 | 0.529 |
+| 10 | 0.780 | 0.523 | 0.838 |
+| 20 | 1.31 | 0.86 | 1.35 |
+| 50 | 2.61 | 1.91 | 2.85 |
+
+With 12 CPUs available and one job at a time, medians in the same column
+order were 0.484/0.351/0.505, 0.762/0.514/0.881, 1.30/0.86/1.63, and
+2.58/1.91/3.54 ms. These are comparisons on this corpus, not claims of
+multicore speedup or equivalent collation semantics.
+
+A one-core spill-path check with the same alphabet and seed, measured with
+3 s sampling, took 13.39 vs 11.85 ms at 256 code points and 72.95 vs
+69.26 ms at 1,024, with identical keys and outputs. On the 200,000-row
+workload the median peak whole-process RSS was approximately 233 MiB for
+both builds. For correctness, the independently linked C consumer compares
+against Zig across inline/heap boundaries and checks sizing, exact-capacity
+in-place writes, and unchanged undersized buffers. Timing remains telemetry.

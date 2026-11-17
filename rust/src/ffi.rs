@@ -1,5 +1,5 @@
 //! The public header's checked ABI, with panic containment at each fallible edge.
-use crate::{Collator, Error};
+use crate::{Collator, Error, core};
 use std::{
     alloc::{Layout, alloc, dealloc},
     panic::{AssertUnwindSafe, catch_unwind},
@@ -168,21 +168,32 @@ pub unsafe extern "C" fn rcol_sort_key_utf8(
             }
             return 0;
         }
-        let key = match coll.sort_key(input) {
+        let mut key = core::Levels::default();
+        if let Err(e) = core::house_key(&mut key, input, coll.options) {
+            return status(e);
+        }
+        let parts = key.parts();
+        let need = match core::key_len(&parts) {
             Ok(k) => k,
             Err(e) => return status(e),
         };
         unsafe {
-            required.write(key.len());
+            required.write(need);
         }
         if cap == 0 {
             return 0;
         }
-        if cap < key.len() {
+        if cap < need {
             return 3;
         }
-        unsafe {
-            ptr::copy_nonoverlapping(key.as_ptr(), out, key.len());
+        // No part borrows input or output. Write only after input has been
+        // consumed and capacity verified; the caller's bytes may be uninitialized.
+        let mut dest = out;
+        for part in parts {
+            unsafe {
+                ptr::copy_nonoverlapping(part.as_ptr(), dest, part.len());
+                dest = dest.add(part.len());
+            }
         }
         0
     })

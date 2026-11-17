@@ -7,22 +7,91 @@ use tables::{
 };
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Default)]
-struct Bytes(Vec<u8>);
-impl Bytes {
-    fn push(&mut self, byte: u8) -> Result<()> {
-        self.0.try_reserve(1).map_err(|_| Error::OutOfMemory)?;
-        self.0.push(byte);
-        Ok(())
-    }
-    fn extend(&mut self, bytes: &[u8]) -> Result<()> {
-        self.0
-            .try_reserve(bytes.len())
-            .map_err(|_| Error::OutOfMemory)?;
-        self.0.extend_from_slice(bytes);
-        Ok(())
+// Keep short weight streams and digit runs on the stack. Longer inputs still
+// grow fallibly and geometrically, without imposing a length limit.
+enum Bytes<const N: usize> {
+    Inline { bytes: [u8; N], len: usize },
+    Heap(Vec<u8>),
+}
+impl<const N: usize> Default for Bytes<N> {
+    fn default() -> Self {
+        Self::Inline {
+            bytes: [0; N],
+            len: 0,
+        }
     }
 }
+impl<const N: usize> Bytes<N> {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Inline { bytes, len } => &bytes[..*len],
+            Self::Heap(bytes) => bytes,
+        }
+    }
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        match self {
+            Self::Inline { bytes, len } => &mut bytes[..*len],
+            Self::Heap(bytes) => bytes,
+        }
+    }
+    fn truncate(&mut self, at: usize) {
+        match self {
+            Self::Inline { len, .. } => *len = (*len).min(at),
+            Self::Heap(bytes) => bytes.truncate(at),
+        }
+    }
+    #[inline(always)]
+    fn push(&mut self, byte: u8) -> Result<()> {
+        match self {
+            Self::Inline { bytes, len } => {
+                if let Some(slot) = bytes.get_mut(*len) {
+                    *slot = byte;
+                    *len += 1;
+                } else {
+                    *self = Self::Heap(Self::spill(bytes, &[byte])?);
+                }
+            }
+            Self::Heap(heap) => {
+                heap.try_reserve(1).map_err(|_| Error::OutOfMemory)?;
+                heap.push(byte);
+            }
+        }
+        Ok(())
+    }
+    #[inline(always)]
+    fn extend(&mut self, bytes: &[u8]) -> Result<()> {
+        match self {
+            Self::Inline { bytes: dest, len } => {
+                if let Some(tail) = dest[*len..].get_mut(..bytes.len()) {
+                    tail.copy_from_slice(bytes);
+                    *len += bytes.len();
+                } else {
+                    *self = Self::Heap(Self::spill(&dest[..*len], bytes)?);
+                }
+            }
+            Self::Heap(heap) => {
+                heap.try_reserve(bytes.len())
+                    .map_err(|_| Error::OutOfMemory)?;
+                heap.extend_from_slice(bytes);
+            }
+        }
+        Ok(())
+    }
+    #[cold]
+    fn spill(prefix: &[u8], extra: &[u8]) -> Result<Vec<u8>> {
+        let need = prefix
+            .len()
+            .checked_add(extra.len())
+            .ok_or(Error::OutOfMemory)?;
+        let mut heap = Vec::new();
+        heap.try_reserve_exact(need.max(N.saturating_mul(2)))
+            .map_err(|_| Error::OutOfMemory)?;
+        heap.extend_from_slice(prefix);
+        heap.extend_from_slice(extra);
+        Ok(heap)
+    }
+}
+type Digits = Bytes<32>;
 
 fn decode(s: &[u8], i: usize) -> Option<(u32, usize)> {
     let b = *s.get(i)?;
@@ -47,9 +116,13 @@ fn digit(s: &[u8], i: usize) -> Option<(u8, usize)> {
         return None;
     }
     let (cp, n) = decode(s, i)?;
+    digit_value(cp).map(|d| (d, n))
+}
+fn digit_value(cp: u32) -> Option<u8> {
     match cp {
-        0xff10..=0xff19 => Some(((cp - 0xff10) as u8, n)),
-        0x1d7ce..=0x1d7ff => Some((((cp - 0x1d7ce) % 10) as u8, n)),
+        0x30..=0x39 => Some((cp - 0x30) as u8),
+        0xff10..=0xff19 => Some((cp - 0xff10) as u8),
+        0x1d7ce..=0x1d7ff => Some(((cp - 0x1d7ce) % 10) as u8),
         _ => None,
     }
 }
@@ -221,8 +294,8 @@ fn significant(d: &[u8]) -> &[u8] {
 fn trimmed(d: &[u8]) -> &[u8] {
     &d[..d.iter().rposition(|&v| v != 0).map_or(0, |i| i + 1)]
 }
-fn digits(s: &[u8], start: usize) -> Result<(Bytes, usize, u8)> {
-    let mut d = Bytes::default();
+fn digits(s: &[u8], start: usize) -> Result<(Digits, usize, u8)> {
+    let mut d = Digits::default();
     let mut i = start;
     let mut style = 0;
     while let Some((v, n)) = digit(s, i) {
@@ -243,9 +316,9 @@ fn group_sep(s: &[u8], i: usize, comma: bool) -> usize {
         },
     }
 }
-fn grouped(s: &[u8], start: usize, comma: bool, absorb: bool) -> Result<(Bytes, Bytes, usize)> {
-    let mut int = Bytes::default();
-    let mut frac = Bytes::default();
+fn grouped(s: &[u8], start: usize, comma: bool, absorb: bool) -> Result<(Digits, Digits, usize)> {
+    let mut int = Digits::default();
+    let mut frac = Digits::default();
     let mut i = start;
     while i < s.len() {
         if let Some((v, n)) = digit(s, i) {
@@ -263,11 +336,11 @@ fn grouped(s: &[u8], start: usize, comma: bool, absorb: bool) -> Result<(Bytes, 
         let (d, end, _) = digits(s, i + 1)?;
         frac = d;
         i = end;
-        frac.0.truncate(trimmed(&frac.0).len());
+        frac.truncate(trimmed(frac.as_slice()).len());
     }
     Ok((int, frac, i))
 }
-fn exponent(s: &[u8], start: usize) -> Result<Option<(Bytes, bool, usize)>> {
+fn exponent(s: &[u8], start: usize) -> Result<Option<(Digits, bool, usize)>> {
     if !s.get(start).is_some_and(|b| matches!(b, b'e' | b'E')) {
         return Ok(None);
     }
@@ -277,10 +350,10 @@ fn exponent(s: &[u8], start: usize) -> Result<Option<(Bytes, bool, usize)>> {
         i += 1;
     }
     let (d, end, _) = digits(s, i)?;
-    Ok((!d.0.is_empty()).then_some((d, neg, end)))
+    Ok((!d.as_slice().is_empty()).then_some((d, neg, end)))
 }
 /// Add a bounded mantissa offset to an arbitrary-width signed exponent.
-fn adjust(digits: &[u8], negative: bool, offset: i128) -> Result<(bool, Bytes)> {
+fn adjust(digits: &[u8], negative: bool, offset: i128) -> Result<(bool, Digits)> {
     let a = significant(digits);
     let negative = negative && !a.is_empty();
     let mut stack = [0u8; 40];
@@ -294,7 +367,7 @@ fn adjust(digits: &[u8], negative: bool, offset: i128) -> Result<(bool, Bytes)> 
     stack[..n].reverse();
     let b = &stack[..n];
     let b_neg = offset < 0;
-    let mut result = Bytes::default();
+    let mut result = Digits::default();
     let mut sign = negative;
     if negative == b_neg {
         let (mut ia, mut ib, mut carry) = (a.len(), b.len(), 0u8);
@@ -332,21 +405,19 @@ fn adjust(digits: &[u8], negative: bool, offset: i128) -> Result<(bool, Bytes)> 
             result.push(value as u8)?;
         }
     }
-    while result.0.last() == Some(&0) {
-        result.0.pop();
-    }
-    result.0.reverse();
-    if result.0.is_empty() {
+    result.truncate(trimmed(result.as_slice()).len());
+    result.as_mut_slice().reverse();
+    if result.as_slice().is_empty() {
         sign = false;
     }
     Ok((sign, result))
 }
 
 #[derive(Default)]
-struct Levels {
-    p: Bytes,
-    s: Bytes,
-    t: Bytes,
+pub(super) struct Levels {
+    p: Bytes<128>,
+    s: Bytes<64>,
+    t: Bytes<64>,
 }
 impl Levels {
     fn weights(&mut self, secondary: u8, tertiary: u8) -> Result<()> {
@@ -425,8 +496,8 @@ impl Levels {
                 let (sign, d) = adjust(d, sign, offset)?;
                 let flip = sign != neg;
                 self.p.push(if flip { 2 } else { 3 })?;
-                self.length(d.0.len(), flip)?;
-                self.emit_digits(&d.0, flip)?;
+                self.length(d.as_slice().len(), flip)?;
+                self.emit_digits(d.as_slice(), flip)?;
                 self.emit_digits(
                     if fraction.is_empty() {
                         trimmed(sig)
@@ -495,7 +566,7 @@ impl Levels {
         while i < s.len() {
             if digit(s, i).is_some() {
                 let (d, end, style) = digits(s, i)?;
-                self.integer(&d.0, false, style, zero_weight(&d.0))?;
+                self.integer(d.as_slice(), false, style, zero_weight(d.as_slice()))?;
                 i = end;
                 continue;
             }
@@ -510,13 +581,15 @@ impl Levels {
         }
         Ok(())
     }
-    fn finish(mut self) -> Result<Vec<u8>> {
-        self.p.push(1)?;
-        self.p.extend(&self.s.0)?;
-        self.p.push(1)?;
-        self.p.extend(&self.t.0)?;
-        self.p.push(0)?;
-        Ok(self.p.0)
+    pub(super) fn parts(&self) -> [&[u8]; 6] {
+        [
+            self.p.as_slice(),
+            &[1],
+            self.s.as_slice(),
+            &[1],
+            self.t.as_slice(),
+            &[0],
+        ]
     }
 }
 fn zero_weight(d: &[u8]) -> u8 {
@@ -524,31 +597,54 @@ fn zero_weight(d: &[u8]) -> u8 {
 }
 
 pub(super) fn sort_key(s: &[u8], options: u32) -> Result<Vec<u8>> {
-    if options & 1 != 0 {
-        let mut key = Bytes::default();
-        key.extend(s)?;
-        key.push(0)?;
-        return Ok(key.0);
+    fn join(parts: &[&[u8]]) -> Result<Vec<u8>> {
+        let mut key = Vec::new();
+        key.try_reserve_exact(key_len(parts)?)
+            .map_err(|_| Error::OutOfMemory)?;
+        for part in parts {
+            key.extend_from_slice(part);
+        }
+        Ok(key)
     }
+    if options & 1 != 0 {
+        return join(&[s, &[0]]);
+    }
+    let mut levels = Levels::default();
+    house_key(&mut levels, s, options)?;
+    join(&levels.parts())
+}
+
+pub(super) fn key_len(parts: &[&[u8]]) -> Result<usize> {
+    parts.iter().try_fold(0usize, |total, part| {
+        total.checked_add(part.len()).ok_or(Error::OutOfMemory)
+    })
+}
+
+pub(super) fn house_key(out: &mut Levels, s: &[u8], options: u32) -> Result<()> {
     let (decimal, sci, use_roman) = (
         options & (8 | 32) != 0,
         options & 32 != 0,
         options & 64 != 0,
     );
-    let mut out = Levels::default();
     let mut i = 0;
     if !decimal && s.first() == Some(&b'-') && digit(s, 1).is_some() {
         let (d, end, _) = digits(s, 1)?;
-        out.integer(&d.0, true, 0, zero_weight(&d.0))?;
+        out.integer(d.as_slice(), true, 0, zero_weight(d.as_slice()))?;
         i = end;
     }
     while i < s.len() {
         let b = s[i];
+        let decoded = if b.is_ascii() {
+            Some((b as u32, 1))
+        } else {
+            decode(s, i)
+        };
+        let is_digit = decoded.is_some_and(|(cp, _)| digit_value(cp).is_some());
         if decimal {
             let signed = i == 0 && digit(s, 1).is_some();
             let neg = signed && b == b'-';
             let pos = signed && b == b'+';
-            if neg || pos || digit(s, i).is_some() {
+            if neg || pos || is_digit {
                 let (int, frac, end) = grouped(
                     s,
                     i + usize::from(neg || pos),
@@ -557,9 +653,9 @@ pub(super) fn sort_key(s: &[u8], options: u32) -> Result<Vec<u8>> {
                 )?;
                 let ex = if sci { exponent(s, end)? } else { None };
                 out.numeric(
-                    &int.0,
-                    &frac.0,
-                    ex.as_ref().map(|t| (t.0.0.as_slice(), t.1)),
+                    int.as_slice(),
+                    frac.as_slice(),
+                    ex.as_ref().map(|t| (t.0.as_slice(), t.1)),
                     sci,
                     neg,
                 )?;
@@ -585,13 +681,13 @@ pub(super) fn sort_key(s: &[u8], options: u32) -> Result<Vec<u8>> {
             i = end;
             continue;
         }
-        if digit(s, i).is_some() {
+        if is_digit {
             let (d, end, style) = digits(s, i)?;
-            out.integer(&d.0, false, style, zero_weight(&d.0))?;
+            out.integer(d.as_slice(), false, style, zero_weight(d.as_slice()))?;
             i = end;
             continue;
         }
-        let Some((cp, n)) = decode(s, i) else {
+        let Some((cp, n)) = decoded else {
             out.other(b as u32)?;
             i += 1;
             continue;
@@ -631,5 +727,5 @@ pub(super) fn sort_key(s: &[u8], options: u32) -> Result<Vec<u8>> {
         }
         i += n;
     }
-    out.finish()
+    Ok(())
 }
