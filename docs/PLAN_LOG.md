@@ -69,3 +69,4 @@ Completed PLAN.md items retired by plan-retire, oldest retirement first.
 ## Retired 2026-11-17
 
 - [x] [Library polish] Keep collation equality as disclosed behavior without changing ordering revision 1; SQL and Elixir equality remain distinct from byte identity (done 2026-11-15 17:07 EST; commit f652b03).
+- [x] [Library polish] Reduce CLI peak memory from 314368 to 173056 KiB on one million lines with identical output; stable-page resource and error regressions pass (done 2026-11-15 17:07 EST; commit 036b246).
