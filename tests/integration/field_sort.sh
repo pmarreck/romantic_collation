@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration test: field / separator sorting in `collate` (à la `sort -t -k`).
 #   -t/--field-separator <SEP>  : split each line on SEP (default: whole line)
-#   -k/--key <N>                : sort by 1-based field N; ties -> whole line
+#   -k/--key <N>                : sort by 1-based field N; ties keep input order
 #   COLLATE_FIELD_SEP           : env default separator, overridden by -t
 # The Zig core stays field-agnostic; field extraction happens in the C CLI.
 set -u
@@ -49,9 +49,9 @@ assert_eq "multi-char separator '::'" $'b::1\nc::2\na::3' "$out"
 out=$(printf 'k2\tb\nlonely\nk2\ta\n' | "$CLI" -t$'\t' -k2 2>/dev/null)
 assert_eq "missing field sorts as empty (first)" $'lonely\nk2\ta\nk2\tb' "$out"
 
-# ── ties on the key field break by the whole line (deterministic) ──
+# ── ties on the key field retain input order (stable) ──
 out=$(printf 'b:1\na:1\nc:1\n' | "$CLI" -t: -k2 2>/dev/null)
-assert_eq "tie on field breaks by whole line" $'a:1\nb:1\nc:1' "$out"
+assert_eq "tie on field preserves input order" $'b:1\na:1\nc:1' "$out"
 
 # ── env COLLATE_FIELD_SEP provides the default separator ──
 out=$(printf 'a,3\nb,1\nc,2\n' | COLLATE_FIELD_SEP=, "$CLI" -k2 2>/dev/null)

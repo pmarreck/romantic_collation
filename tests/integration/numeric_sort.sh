@@ -249,13 +249,13 @@ assert_order "default distinguishes"          -- 007 07 7
 assert_order "default, embedded"              -- word007 word7
 assert_order "default, negatives"             -- -007 -7
 assert_order "value still dominates"          -- 007 8
-# In numeric modes they are the same number, so the CLI's raw-byte tie-break
-# decides and the pair must come out in byte order either way it is fed.
+# In numeric modes they are the same number, so the CLI preserves each input
+# order. Both permutations are required to distinguish stability from byte order.
 for flag in -d -s; do
 	a=$(printf '007\n7\n' | "$CLI" $flag | tr '\n' ' ')
 	b=$(printf '7\n007\n' | "$CLI" $flag | tr '\n' ' ')
-	if [[ "$a" == "$b" ]]; then
-		pass "$flag: 007 and 7 tie (order independent of input order)"
+	if [[ "$a" == '007 7 ' && "$b" == '7 007 ' ]]; then
+		pass "$flag: 007 and 7 tie (each input order is preserved)"
 	else
 		fail "$flag: 007/7 not a tie — got '$a' vs '$b'"
 	fi

@@ -65,3 +65,7 @@ Completed PLAN.md items retired by plan-retire, oldest retirement first.
 - [x] [Library polish] Add loadable SQLite/PostgreSQL extensions; 30 real-engine checks and installed C ABI consumer pass (done 2026-11-14 10:57 EST; commit c2f04f2).
 - [x] [Library polish] Document new features, SQL examples, limits, and index migration in README, database guide, C header, and all eight help catalogs (done 2026-11-14 10:57 EST; commit c2f04f2).
 - [x] [Library polish] Qualify 443 tests, 200k fuzz iterations, the complexity gate, and five target builds; final push and CI evidence are recorded by Git and the CI service (done 2026-11-14 10:57 EST; commit c2f04f2).
+
+## Retired 2026-11-17
+
+- [x] [Library polish] Keep collation equality as disclosed behavior without changing ordering revision 1; SQL and Elixir equality remain distinct from byte identity (done 2026-11-15 17:07 EST; commit f652b03).

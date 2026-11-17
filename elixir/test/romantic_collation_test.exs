@@ -57,4 +57,12 @@ defmodule RomanticCollationTest do
     assert RomanticCollation.compare("a€", "aa") == :gt
     assert RomanticCollation.compare("a—", "aa", code_point: true) == :gt
   end
+
+  test "equal-key sorting preserves either input order" do
+    for values <- [["a ", "a\t", "a\u2002"], ["ș", "ş"], ["1e1", "10e0"]] do
+      for input <- [values, Enum.reverse(values)] do
+        assert RomanticCollation.sort(input, scientific: true) == input
+      end
+    end
+  end
 end

@@ -71,7 +71,7 @@ run_suite "Generated Rust tables" "luajit tools/gen-rust-tables generated-tables
 run_suite "Generated Unicode structural table" "luajit tools/gen-structural-data '$RCOL_UNICODE_DATA' '$RCOL_PROP_LIST' generated-structure.zig && cmp src/structural_data.zig generated-structure.zig && echo '1 passed, 0 failed'"
 run_suite "Zig Unicode structural properties" "'$RCOL_STRUCTURE_ORACLE' '$RCOL_ZIG_SHARED' '$RCOL_UNICODE_DATA' '$RCOL_PROP_LIST'"
 run_suite "Rust Unicode structural properties" "'$RCOL_STRUCTURE_ORACLE' '$RCOL_RUST_SHARED' '$RCOL_UNICODE_DATA' '$RCOL_PROP_LIST'"
-run_suite "Rust-backed Elixir NIF" "cat '$RCOL_ELIXIR_LOG' && echo '8 passed, 0 failed'"
+run_suite "Rust-backed Elixir NIF" "cat '$RCOL_ELIXIR_LOG' && echo '9 passed, 0 failed'"
 
 # Benchmark policy is pure classification and belongs in the ordinary suite;
 # actual timing remains exclusive to ./bm.

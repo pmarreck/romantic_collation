@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration test: line-oriented CLI tools that sit outside collation itself.
 #   trailing CR is stripped when a line is split (CRLF input, LF output)
-#   -r/--reverse flips the finished order
+#   -r/--reverse sorts descending without reversing equal-key arrival order
 #   -u/--unique keeps one row per equal sort key (not per raw line)
 #   -o/--output writes to a file, stdout, or stderr
 set -u
@@ -55,9 +55,9 @@ fi
 
 # ── unique by sort key, not by raw bytes ──
 # A space and a tab are the same whitespace element. The kept line is the one
-# that sorts first, which is the raw-byte tie-break (tab before space).
+# encountered first in the input, independent of its byte spelling.
 out=$(printf ' \n\t\nz\n' | "$CLI" -u 2>/dev/null)
-if [[ "$out" == $'\t\nz' ]]; then
+if [[ "$out" == $' \nz' ]]; then
 	pass "-u collapses equal whitespace keys and keeps the first"
 else
 	fail "-u whitespace got $(printf '%s' "$out" | od -An -tx1)"
@@ -70,7 +70,7 @@ else
 	fail "--unique case got '$out'"
 fi
 # Default mode keeps the leading-zero distinction. Numeric mode does not:
-# 01 and 1 are one key there, and the raw tie-break keeps "01".
+# 01 and 1 are one key there, and stability keeps the first input, "1".
 out=$(printf '1\n01\n2\n' | "$CLI" -u 2>/dev/null)
 if [[ "$out" == $'01\n1\n2' ]]; then
 	pass "-u keeps a default-mode leading-zero distinction"
@@ -78,15 +78,15 @@ else
 	fail "-u default leading-zero got '$out'"
 fi
 out=$(printf '1\n01\n2\n' | "$CLI" -n -u 2>/dev/null)
-if [[ "$out" == $'01\n2' ]]; then
+if [[ "$out" == $'1\n2' ]]; then
 	pass "-u collapses equal numeric keys"
 else
 	fail "-u numeric got '$out'"
 fi
-# Reverse happens after unique, so the kept representative is the ascending one.
+# Descending mode retains the same first-input representative.
 out=$(printf ' \n\t\nz\n' | "$CLI" -u -r 2>/dev/null)
-if [[ "$out" == $'z\n\t' ]]; then
-	pass "-u -r keeps the ascending representative, then reverses"
+if [[ "$out" == $'z\n ' ]]; then
+	pass "-u -r keeps the first input representative"
 else
 	fail "-u -r got $(printf '%s' "$out" | od -An -tx1)"
 fi

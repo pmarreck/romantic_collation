@@ -23,6 +23,8 @@ check 'SQLite Roman option' "$(sq "SELECT romantic_key_v2('VII',64) < romantic_k
 check 'SQLite arbitrary exponent' "$(sq "SELECT romantic_key_v2('1e9999999999',32) < romantic_key_v2('1e10000000000',32);")" 1
 check 'SQLite exponent normalization' "$(sq "SELECT romantic_key_v2('10e99999999999999999999',32) = romantic_key_v2('1e100000000000000000000',32);")" 1
 check 'SQLite canonical equality' "$(sq "SELECT romantic_key_v2('ș') = romantic_key_v2('ş');")" 1
+check 'SQLite Unicode punctuation precedes letters' "$(sq "SELECT romantic_key_v2('a—') < romantic_key_v2('aa');")" 1
+check 'SQLite Unicode whitespace equality' "$(sq "SELECT romantic_key_v2('a'||char(8194)) = romantic_key_v2('a ');")" 1
 check 'SQLite long key' "$(sq "SELECT length(romantic_key_v2(printf('%10000s','a'))) > 10000;")" 1
 for invalid in -1 128 4294967296 "'oops'"; do
 	out=$(sq "SELECT romantic_key_v2('a',$invalid);" 2>&1); rc=$?
@@ -32,6 +34,8 @@ out=$(sq "PRAGMA trusted_schema=OFF; CREATE TABLE t(v TEXT); INSERT INTO t VALUE
 check 'SQLite indexed/unindexed order agrees' "$out" $'apple,Apple,file2,file10\napple,Apple,file2,file10'
 out=$(sq "CREATE TABLE t(v TEXT); CREATE INDEX ix ON t(romantic_key_v2(v)); EXPLAIN QUERY PLAN SELECT v FROM t ORDER BY romantic_key_v2(v);")
 check 'SQLite uses expression index' "$([[ "$out" == *'USING INDEX ix'* ]] && echo yes)" yes
+out=$(sq "CREATE TABLE stable_input(input_ordinal INTEGER PRIMARY KEY,v TEXT); INSERT INTO stable_input VALUES(1,'a '),(2,'b'),(3,'a'||char(9)); CREATE INDEX stable_ix ON stable_input(romantic_key_v2(v),input_ordinal); SELECT group_concat(input_ordinal,',') FROM (SELECT input_ordinal FROM stable_input ORDER BY romantic_key_v2(v),input_ordinal); SELECT group_concat(input_ordinal,',') FROM (SELECT input_ordinal FROM stable_input ORDER BY romantic_key_v2(v) DESC,input_ordinal ASC);")
+check 'SQLite explicit arrival ordinal preserves ties in both directions' "$out" $'1,3,2\n2,1,3'
 
 # No network listeners, no existing cluster, unique Unix socket directory.
 initdb -D "$work/pg" -A trust --no-locale -E UTF8 >"$work/init.log" 2>&1 || { cat "$work/init.log"; exit 1; }
@@ -47,6 +51,8 @@ check 'PostgreSQL Roman option' "$(pg "SELECT romantic_key_v2('VII',64) < romant
 check 'PostgreSQL arbitrary exponent' "$(pg "SELECT romantic_key_v2('1e9999999999',32) < romantic_key_v2('1e10000000000',32);")" t
 check 'PostgreSQL exponent normalization' "$(pg "SELECT romantic_key_v2('10e99999999999999999999',32) = romantic_key_v2('1e100000000000000000000',32);")" t
 check 'PostgreSQL canonical equality' "$(pg "SELECT romantic_key_v2('ș') = romantic_key_v2('ş');")" t
+check 'PostgreSQL Unicode punctuation precedes letters' "$(pg "SELECT romantic_key_v2('a—') < romantic_key_v2('aa');")" t
+check 'PostgreSQL Unicode whitespace equality' "$(pg "SELECT romantic_key_v2('a'||chr(8194)) = romantic_key_v2('a ');")" t
 check 'PostgreSQL long key' "$(pg "SELECT octet_length(romantic_key_v2(repeat('a',10000))) > 10000;")" t
 for invalid in -1 128; do
 	out=$(pg "SELECT romantic_key_v2('a',$invalid);" 2>&1); rc=$?
@@ -56,6 +62,8 @@ out=$(pg "CREATE TABLE t(v text); INSERT INTO t VALUES('file10'),('file2'),('App
 check 'PostgreSQL indexed order' "$out" 'apple,Apple,file2,file10'
 out=$(pg 'SET enable_seqscan=off; EXPLAIN (COSTS OFF) SELECT v FROM t ORDER BY romantic_key_v2(v);')
 check 'PostgreSQL uses expression index' "$([[ "$out" == *'Index Scan using ix'* ]] && echo yes)" yes
+out=$(pg "CREATE TABLE stable_input(input_ordinal INTEGER PRIMARY KEY,v TEXT); INSERT INTO stable_input VALUES(1,'a '),(2,'b'),(3,'a'||chr(9)); CREATE INDEX stable_ix ON stable_input(romantic_key_v2(v),input_ordinal); SELECT string_agg(input_ordinal::text,',' ORDER BY romantic_key_v2(v),input_ordinal) FROM stable_input; SELECT string_agg(input_ordinal::text,',' ORDER BY romantic_key_v2(v) DESC,input_ordinal ASC) FROM stable_input;")
+check 'PostgreSQL explicit arrival ordinal preserves ties in both directions' "$out" $'1,3,2\n2,1,3'
 check 'SQLite/PostgreSQL exact binary key agreement' "$(sq "SELECT lower(hex(romantic_key_v2('café 10')));")" "$(pg "SELECT encode(romantic_key_v2('café 10'),'hex');")"
 echo "database: $PASS passed, $FAIL failed"
 exit "$FAIL"

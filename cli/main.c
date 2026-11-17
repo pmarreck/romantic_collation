@@ -128,7 +128,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Options:\n"
         "  -t, --field-separator <SEP>  Split each line on SEP (default: whole line)\n"
-        "  -k, --key <N>                Sort by the 1-based Nth field; ties -> whole line\n"
+        "  -k, --key <N>                Sort by the 1-based Nth field; ties keep input order\n"
         "  -c, --code-point             Pure UTF-8 byte order (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Declare the input contains DECIMAL numbers.\n"
         "                               SEP is the decimal mark, '.' (default) or\n"
@@ -149,8 +149,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Canonical, uniform-case tokens\n"
         "                               only; note MIX is legitimately 1009.\n"
         "      --version-sort           Explicit form of the default dot handling\n"
-        "  -r, --reverse                Reverse the finished order\n"
-        "  -u, --unique                 Keep one line per equal sort key\n"
+        "  -r, --reverse                Descending order; ties keep input order\n"
+        "  -u, --unique                 Keep the first input line per equal sort key\n"
         "  -o, --output <FILE>          Write to FILE (-, @stdout, or @stderr)\n"
         "  -h, --help                   Show this help\n"
         "      --about                  Print one-line version + platform\n"
@@ -193,7 +193,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Optionen:\n"
         "  -t, --field-separator <SEP>  Zeile an SEP trennen (Standard: ganze Zeile)\n"
-        "  -k, --key <N>                Nach dem N-ten Feld sortieren; gleich -> ganze Zeile\n"
+        "  -k, --key <N>                Nach dem N-ten Feld sortieren; Gleichstände bleiben in Eingabereihenfolge\n"
         "  -c, --code-point             Reine UTF-8-Byte-Reihenfolge (== LC_ALL=C sort)\n"
         "  -d, --decimal[=TRZ]          Eingabe enthält DEZIMALZAHLEN. TRZ ist das\n"
         "                               Dezimaltrennzeichen, '.' (Standard) oder ','.\n"
@@ -208,8 +208,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "  -n, --num, --numeric[=TRZ]   Beides: Exponenten UND Tausendertrenner.\n"
         "      --roman                  Römische Zahlen nach Wert sortieren (VII < IX)\n"
         "      --version-sort           Ausdrückliche Form des Standardverhaltens\n"
-        "  -r, --reverse                Kehrt die fertige Reihenfolge um\n"
-        "  -u, --unique                 Eine Zeile je gleichem Sortierschlüssel\n"
+        "  -r, --reverse                Absteigend; Gleichstände bleiben in Eingabereihenfolge\n"
+        "  -u, --unique                 Erste Eingabezeile je gleichem Sortierschlüssel behalten\n"
         "  -o, --output <DATEI>         Schreibt nach DATEI (-, @stdout, @stderr)\n"
         "  -h, --help / --hilfe         Diese Hilfe anzeigen\n"
         "      --about                  Version + Plattform in einer Zeile\n"
@@ -252,7 +252,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Options :\n"
         "  -t, --field-separator <SEP>  Sépare chaque ligne par SEP (par défaut : ligne entière)\n"
-        "  -k, --key <N>                Trie selon le Nième champ ; égalité -> ligne entière\n"
+        "  -k, --key <N>                Trie selon le Nième champ ; égalités dans l'ordre d'entrée\n"
         "  -c, --code-point             Ordre pur des octets UTF-8 (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Déclare que l’entrée contient des nombres DÉCIMAUX.\n"
         "                               SEP est la marque décimale, '.' (par défaut) ou\n"
@@ -273,8 +273,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Jetons canoniques, de casse uniforme ;\n"
         "                               MIX vaut légitimement 1009.\n"
         "      --version-sort           Forme explicite du traitement des points par défaut\n"
-        "  -r, --reverse                Inverse l'ordre obtenu\n"
-        "  -u, --unique                 Une ligne par clé de tri égale\n"
+        "  -r, --reverse                Ordre décroissant ; égalités dans l'ordre d'entrée\n"
+        "  -u, --unique                 Garde la première ligne d'entrée par clé de tri égale\n"
         "  -o, --output <FICHIER>       Écrit dans FICHIER (-, @stdout, @stderr)\n"
         "  -h, --help / --aide          Affiche cette aide\n"
         "      --about                  Affiche version + plateforme sur une ligne\n"
@@ -317,7 +317,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Opciones:\n"
         "  -t, --field-separator <SEP>  Divide cada línea por SEP (predeterminado: línea completa)\n"
-        "  -k, --key <N>                Ordena por el N.º campo; empate -> línea completa\n"
+        "  -k, --key <N>                Ordena por el N.º campo; los empates conservan el orden de entrada\n"
         "  -c, --code-point             Orden puro de bytes UTF-8 (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Declara que la entrada contiene números DECIMALES.\n"
         "                               SEP es la marca decimal, '.' (predeterminada) o\n"
@@ -338,8 +338,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Solo tokens canónicos de una caja;\n"
         "                               MIX vale legítimamente 1009.\n"
         "      --version-sort           Forma explícita del tratamiento de puntos predeterminado\n"
-        "  -r, --reverse                Invierte el orden resultante\n"
-        "  -u, --unique                 Una línea por clave de ordenación igual\n"
+        "  -r, --reverse                Orden descendente; los empates conservan el orden de entrada\n"
+        "  -u, --unique                 Conserva la primera línea de entrada por clave igual\n"
         "  -o, --output <ARCHIVO>       Escribe en ARCHIVO (-, @stdout, @stderr)\n"
         "  -h, --help / --ayuda         Muestra esta ayuda\n"
         "      --about                  Muestra versión + plataforma en una línea\n"
@@ -382,7 +382,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Opzioni:\n"
         "  -t, --field-separator <SEP>  Divide ogni riga con SEP (predefinito: riga intera)\n"
-        "  -k, --key <N>                Ordina per l’N-esimo campo; parità -> riga intera\n"
+        "  -k, --key <N>                Ordina per l’N-esimo campo; le parità mantengono l'ordine di ingresso\n"
         "  -c, --code-point             Ordine puro dei byte UTF-8 (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Dichiara che l’input contiene numeri DECIMALI.\n"
         "                               SEP è il separatore decimale, '.' (predefinito) o\n"
@@ -403,8 +403,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Solo token canonici a caso uniforme;\n"
         "                               MIX vale legittimamente 1009.\n"
         "      --version-sort           Forma esplicita della gestione predefinita dei punti\n"
-        "  -r, --reverse                Inverte l'ordine ottenuto\n"
-        "  -u, --unique                 Una riga per chiave di ordinamento uguale\n"
+        "  -r, --reverse                Ordine decrescente; le parità mantengono l'ordine di ingresso\n"
+        "  -u, --unique                 Mantiene la prima riga di ingresso per chiave uguale\n"
         "  -o, --output <FILE>          Scrive su FILE (-, @stdout, @stderr)\n"
         "  -h, --help / --aiuto         Mostra questo aiuto\n"
         "      --about                  Mostra versione + piattaforma su una riga\n"
@@ -447,7 +447,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Opções:\n"
         "  -t, --field-separator <SEP>  Separa cada linha por SEP (padrão: linha inteira)\n"
-        "  -k, --key <N>                Ordena pelo N.º campo; empate -> linha inteira\n"
+        "  -k, --key <N>                Ordena pelo N.º campo; empates mantêm a ordem de entrada\n"
         "  -c, --code-point             Ordem pura de bytes UTF-8 (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Declara que a entrada contém números DECIMAIS.\n"
         "                               SEP é a marca decimal, '.' (padrão) ou\n"
@@ -468,8 +468,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Apenas tokens canônicos de uma só caixa;\n"
         "                               MIX vale legitimamente 1009.\n"
         "      --version-sort           Forma explícita do tratamento padrão dos pontos\n"
-        "  -r, --reverse                Inverte a ordem obtida\n"
-        "  -u, --unique                 Uma linha por chave de ordenação igual\n"
+        "  -r, --reverse                Ordem decrescente; empates mantêm a ordem de entrada\n"
+        "  -u, --unique                 Mantém a primeira linha de entrada por chave igual\n"
         "  -o, --output <ARQUIVO>       Escreve em ARQUIVO (-, @stdout, @stderr)\n"
         "  -h, --help / --ajuda         Mostra esta ajuda\n"
         "      --about                  Mostra versão + plataforma numa linha\n"
@@ -512,7 +512,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Opcions:\n"
         "  -t, --field-separator <SEP>  Separa cada línia per SEP (per defecte: línia sencera)\n"
-        "  -k, --key <N>                Ordena pel N-èsim camp; empat -> línia sencera\n"
+        "  -k, --key <N>                Ordena pel N-èsim camp; els empats mantenen l'ordre d'entrada\n"
         "  -c, --code-point             Ordre pur de bytes UTF-8 (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Declara que l’entrada conté nombres DECIMALS.\n"
         "                               SEP és la marca decimal, '.' (per defecte) o\n"
@@ -533,8 +533,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Només tokens canònics de caixa uniforme;\n"
         "                               MIX val legítimament 1009.\n"
         "      --version-sort           Forma explícita del tractament de punts per defecte\n"
-        "  -r, --reverse                Inverteix l'ordre obtingut\n"
-        "  -u, --unique                 Una línia per clau d'ordenació igual\n"
+        "  -r, --reverse                Ordre descendent; els empats mantenen l'ordre d'entrada\n"
+        "  -u, --unique                 Manté la primera línia d'entrada per clau igual\n"
         "  -o, --output <FITXER>        Escriu a FITXER (-, @stdout, @stderr)\n"
         "  -h, --help / --ajut          Mostra aquesta ajuda\n"
         "      --about                  Mostra versió + plataforma en una línia\n"
@@ -577,7 +577,7 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "\n"
         "Opțiuni:\n"
         "  -t, --field-separator <SEP>  Desparte fiecare linie la SEP (implicit: linia întreagă)\n"
-        "  -k, --key <N>                Sortează după al N-lea câmp; egalitate -> linia întreagă\n"
+        "  -k, --key <N>                Sortează după al N-lea câmp; egalitățile păstrează ordinea de intrare\n"
         "  -c, --code-point             Ordine pură de octeți UTF-8 (== LC_ALL=C sort)\n"
         "  -d, --decimal[=SEP]          Declară că intrarea conține numere ZECIMALE.\n"
         "                               SEP este semnul zecimal, '.' (implicit) sau\n"
@@ -598,8 +598,8 @@ static const messages_t MESSAGES[LANG_COUNT] = {
         "                               (VII < IX). Doar tokeni canonici de aceeași literă;\n"
         "                               MIX este legitim 1009.\n"
         "      --version-sort           Forma explicită a tratării implicite a punctelor\n"
-        "  -r, --reverse                Inversează ordinea obținută\n"
-        "  -u, --unique                 O linie per cheie de sortare egală\n"
+        "  -r, --reverse                Ordine descrescătoare; egalitățile păstrează ordinea de intrare\n"
+        "  -u, --unique                 Păstrează prima linie de intrare pentru fiecare cheie egală\n"
         "  -o, --output <FIȘIER>        Scrie în FIȘIER (-, @stdout, @stderr)\n"
         "  -h, --help / --ajutor        Afișează acest ajutor\n"
         "      --about                  Afișează versiunea + platforma pe o linie\n"
@@ -874,14 +874,6 @@ static size_t unique_rows(row_t *rows, size_t count) {
     return kept;
 }
 
-static void reverse_rows(row_t *rows, size_t count) {
-    for (size_t i = 0; i < count / 2; i++) {
-        row_t tmp = rows[i];
-        rows[i] = rows[count - 1 - i];
-        rows[count - 1 - i] = tmp;
-    }
-}
-
 /* `-`, `@stdout`, and NULL mean stdout. `@stderr` means stderr. Anything else
  * is a file opened for write. The caller closes `*close_out`. */
 static int open_output(const char *out_path, FILE **out, int *close_out,
@@ -906,20 +898,28 @@ static int open_output(const char *out_path, FILE **out, int *close_out,
     return 0;
 }
 
-/* Order by sort-key memcmp; break ties by raw line bytes for determinism. */
+/* Reverse only key comparisons, never equal-key arrival order. Every line
+ * points into the same live input allocation, so its address is its original
+ * position. This makes qsort's output stable without extra per-row storage or
+ * a platform-specific qsort_r context. Do not use this comparator for rows
+ * backed by separate allocations. */
+static int cmp_rows_direction(const row_t *a, const row_t *b, int descending) {
+    const row_t *first = descending ? b : a;
+    const row_t *second = descending ? a : b;
+    size_t n = first->key_len < second->key_len ? first->key_len : second->key_len;
+    int c = memcmp(first->key, second->key, n);
+    if (c != 0) return c;
+    if (first->key_len != second->key_len)
+        return first->key_len < second->key_len ? -1 : 1;
+    return (a->line > b->line) - (a->line < b->line);
+}
+
 static int cmp_rows(const void *pa, const void *pb) {
-    const row_t *a = (const row_t *)pa;
-    const row_t *b = (const row_t *)pb;
-    size_t n = a->key_len < b->key_len ? a->key_len : b->key_len;
-    int c = memcmp(a->key, b->key, n);
-    if (c != 0) return c;
-    if (a->key_len != b->key_len) return a->key_len < b->key_len ? -1 : 1;
-    /* keys equal: stable-ish tie-break on the raw line */
-    size_t m = a->line_len < b->line_len ? a->line_len : b->line_len;
-    c = memcmp(a->line, b->line, m);
-    if (c != 0) return c;
-    if (a->line_len != b->line_len) return a->line_len < b->line_len ? -1 : 1;
-    return 0;
+    return cmp_rows_direction(pa, pb, 0);
+}
+
+static int cmp_rows_reverse(const void *pa, const void *pb) {
+    return cmp_rows_direction(pa, pb, 1);
 }
 
 /* Write the completed sort as one checked stream operation sequence. Checking
@@ -1091,9 +1091,8 @@ static int cmd_sort(const char *path, uint32_t options,
     int close_out = 0;
     const char *out_name = "stdout";
     if (exit_code == 0) {
-        qsort(rows, idx, sizeof(row_t), cmp_rows);
+        qsort(rows, idx, sizeof(row_t), reverse ? cmp_rows_reverse : cmp_rows);
         if (unique) idx = unique_rows(rows, idx);
-        if (reverse) reverse_rows(rows, idx);
         if (open_output(out_path, &out, &close_out, &out_name) != 0) {
             exit_code = 1;
         } else if (write_rows(out, rows, idx) != 0) {

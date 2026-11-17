@@ -10,7 +10,7 @@ A small, **fast**, **opinionated**, cross-platform, **reproducible** string
 collation / sorting library that ships its own versioned ordering and **ignores
 the OS locale entirely**.
 
-> Yes, it's a pun on the Romance languages. They sort correctly here.
+> Yes, it's a pun on the Romance languages. This is a house order, not every locale's order.
 
 ## Why
 
@@ -69,6 +69,11 @@ In priority order:
    `i < î < j`, `s < ș < t`, and `t < ț < u`. Romanian comma-below, legacy
    cedilla, and decomposed below-mark spellings compare equal.
 6. **Case as the final tie-break.** lowercase before uppercase.
+
+For mixed-language collections, apply one collation policy uniformly, chosen for
+the intended audience. This library does not infer a locale per string, and its
+house tailoring is not a substitute for every language's conventions. See
+[Unicode's mixed-language collation guidance](https://www.unicode.org/faq/collation.html).
 7. **Ligatures expand.** `ß`→`ss`, `œ`→`oe`, `æ`→`ae`, `ĳ`→`ij`, so `straße`
    lands next to `strasse` and `cœur` next to `coeur` instead of after every
    letter. The two stay distinguishable at the tertiary level, so the order
@@ -196,7 +201,18 @@ any NIF, a native memory-safety defect can crash the VM; use a process boundary
 for untrusted workloads requiring crash isolation. Restart the VM when replacing
 the native module; hot NIF upgrades are not supported.
 
+For fuller-featured, locale-aware **CLDR collation in Elixir**, consider
+[Localize](https://github.com/elixir-localize/localize), which offers native
+Elixir and ICU-backed collation. This library instead supplies one reproducible
+house order with its own numeric and optional Roman-numeral rules.
+
 ## CLI
+
+Sorting is stable: collation-equal lines retain their input order, including
+with `--reverse` and when selecting a field with `-k`. `--unique` keeps the
+first input line for each equal key in either direction. Case and other actual
+key distinctions still affect ordering. This replaces the earlier raw-byte
+tie-break; it changes CLI presentation, not the ordering revision or key bytes.
 
 Sort keys are packed into stable pages instead of reserving a separate
 overestimated allocation for every row. On a one-million-line workload this
@@ -209,7 +225,7 @@ not an assertion that the allocator returns every freed page to the OS.
 collate [OPTIONS] [FILE]      # sorts lines from FILE (or stdin) to stdout
 
   -t, --field-separator <SEP>  Split each line on SEP (default: whole line)
-  -k, --key <N>                Sort by the 1-based Nth field; ties -> whole line
+  -k, --key <N>                Sort by the 1-based Nth field; ties keep input order
   -c, --code-point             Pure UTF-8 byte order (== LC_ALL=C sort)
   -d, --decimal[=SEP]          Declare DECIMAL input; SEP is the decimal mark,
                                '.' (default) or ','. Digit-group separators are
@@ -220,8 +236,8 @@ collate [OPTIONS] [FILE]      # sorts lines from FILE (or stdin) to stdout
       --roman                  Order whole-token Roman numerals by value
                                (VII < IX); canonical uniform-case tokens only
       --version-sort           Explicit form of the default dot handling
-  -r, --reverse                Reverse the finished order
-  -u, --unique                 Keep one line per equal sort key
+  -r, --reverse                Descending order; ties keep input order
+  -u, --unique                 Keep the first input line per equal sort key
   -o, --output <FILE>          Write to FILE (-, @stdout, or @stderr)
   -h, --help                   Show help
       --about                  One-line version + platform

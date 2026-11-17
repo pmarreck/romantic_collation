@@ -88,6 +88,13 @@ whitespace variants, and numeric equivalents in numeric modes can tie. A UNIQUE
 expression index enforces collation equality. It is not a byte-identity check.
 Keep ordinary text constraints if that is the intended rule. For deterministic
 pagination add a unique row ID after the key in both ORDER BY and the index.
+SQL tables have no inherent input order, and database sorts need not preserve
+ties. To retain arrival order, store an explicit `input_ordinal` and use
+`ORDER BY romantic_key_v2(name), input_ordinal`. For descending stable order,
+use `ORDER BY romantic_key_v2(name) DESC, input_ordinal ASC`, not DESC on both
+columns. An arbitrary unique ID is deterministic, but only an arrival ordinal
+expresses input stability. The CLI and Elixir sort preserve their input order
+without an extra caller-supplied column.
 Do not use the key as a prefix-search representation; its three levels differ
 from the source text.
 

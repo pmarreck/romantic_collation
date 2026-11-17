@@ -37,7 +37,7 @@ Medium severity, high confidence, reproduced by the exponent normalization regre
 
 - House order is a linguistic policy, not a locale-neutral implementation of every alphabet. Turkish case pairs and Hungarian contractions require tailoring; CJK remains code-point ordered.
 - Full Unicode normalization is absent. For example, decomposed acute accents do not generally equal precomposed accents. Romanian below-mark handling is a targeted exception.
-- Equal keys do not imply byte-identical input. Whitespace variants, Romanian canonical forms, and numeric-mode spellings can tie. A unique key index enforces this equivalence, not ordinary text identity. Add an ID or explicit binary text tie-breaker when stable row order matters.
+- Equal keys do not imply byte-identical input. Whitespace variants, Romanian canonical forms, and numeric-mode spellings can tie. A unique key index enforces this equivalence, not ordinary text identity. SQL pagination needs an explicit tie-breaker; input stability specifically requires an arrival ordinal, not an arbitrary ID or byte order.
 - Default version-style numbers, sign-at-offset-zero, optional grouping absorption, and Roman word collisions are deliberate policies. Choose fixed options for each indexed expression.
 - Keys expand input size and PostgreSQL B-tree entries have size limits. Long strings may need bounded application fields or unindexed sorting.
 - The CLI retains its complete input and all keys; it is not an external-memory sort.
@@ -157,13 +157,28 @@ keys. The old Rust backend fails this control at U+0085. Shared CLI regressions
 also failed before the correction. The complete corrected suite passes 2,760
 checks, including both backends, real database engines, and Elixir integration.
 
-### DCR-007: CLI equal-key order is deterministic but not stable (open)
+### DCR-007: CLI equal-key order was deterministic but not stable (resolved)
 
-The CLI currently breaks equal keys by raw line bytes and reverses completed
-output for descending order. Neither retains input order for collation-equal
-values. Elixir's existing sort is stable. The owner requested stable CLI sorting;
-ascending, descending, unique representative, and selected-field semantics need
-explicit regression coverage in the next increment.
+The prior CLI broke equal keys by raw line bytes and reversed completed
+output for descending order. Neither retained input order for collation-equal
+values. Elixir's existing sort is stable. The owner requested stable CLI sorting
+and confirmed that selected-field ties must also retain input order. The CLI now
+uses original input offsets only when keys tie and reverses only the key
+comparison for descending mode. Those offsets come from the existing shared
+input buffer, without increasing per-row storage. Unique filtering retains the
+first input representative in either direction. Key bytes/revision do not change.
+
+New acceptance cases failed 13 checks against the old CLI. Coverage includes
+both input permutations, whitespace/canonical/numeric equivalences, missing
+fields, field/raw modes, unique representatives, and independent integer-group
+expectations for 5,000 shuffled records in four sort/unique combinations. SQL
+documentation and real-engine tests distinguish deterministic IDs from explicit
+arrival ordinals; database sorting itself does not promise stable equal-key order.
+Elixir tests retain stability across both permutations of several equal-key sets.
+The final complete suite passes 2,811 checks, including 22 new CLI cases per
+backend, real-engine arrival-order tests, and the Rust-backed Elixir NIF.
+All seven local CI targets pass; four foreign Zig targets compile successfully.
+Native qualification remains Linux amd64, not foreign runtime execution.
 
 ### Policy distinctions, not automatic defects
 
