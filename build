@@ -61,6 +61,10 @@ while read -r backend pf variant release_package debug_package; do
 	products+=("$product"); artifacts+=("$(readlink "$staging")")
 	command_name=collate; [[ $pf != mswin-* ]] || command_name=collate.exe
 	[[ -x $staging/bin/$command_name ]] || die "missing command in $product"
+	if [[ $command_name == collate ]]; then
+		alias_link="$staging/bin/romantic-collate"
+		[[ -L $alias_link && $(readlink "$alias_link") == collate ]] || die "missing or invalid romantic-collate alias in $product"
+	fi
 	if [[ $pf == "$host_pf" ]]; then
 		about=$("$staging/bin/$command_name" --about) || die 'built command failed verification'
 		[[ $about == *"PF=$pf"* ]] || die "wrong-platform artifact: $about"
@@ -72,10 +76,12 @@ done < build-targets.tsv
 if [[ -n $publication ]]; then
 	[[ ! -L bin && ! -L bin/$host_pf ]] || die 'publication parent is a symlink'
 	mkdir -p "bin/$host_pf" || exit 1
-	for target in "bin/$host_pf/collate" result; do
+	alias_path="bin/$host_pf/romantic-collate"
+	for target in "bin/$host_pf/collate" "$alias_path" result; do
 		[[ ! -e $target || -L $target ]] || die "refusing to replace unmanaged $target"
 	done
 	[[ ! -L bin/$host_pf/collate || $(readlink "bin/$host_pf/collate") == '../../result/bin/collate' ]] || die 'unmanaged command symlink'
+	[[ ! -L $alias_path || $(readlink "$alias_path") == collate ]] || die 'unmanaged romantic-collate symlink'
 	# GNU mv gives atomic no-directory-following replacement on both hosts.
 	nix build .#build-tools --out-link .build-publication-lock/tools || exit $?
 fi
@@ -84,9 +90,10 @@ for index in "${!products[@]}"; do
 	nix-store --add-root "${products[$index]}" --realise "${artifacts[$index]}" >/dev/null || exit $?
 done
 if [[ -n $publication ]]; then
-	# Both targets resolve through one atomic selection, preserving the prior
+	# Both command names resolve through one atomic selection, preserving the prior
 	# publication if any required build or verification above failed.
 	if [[ ! -L bin/$host_pf/collate ]]; then ln -s '../../result/bin/collate' "bin/$host_pf/collate" || exit 1; fi
+	if [[ ! -L $alias_path ]]; then ln -s collate "$alias_path" || exit 1; fi
 	ln -s "$publication" .build-publication-lock/result || exit 1
 	.build-publication-lock/tools/bin/mv -Tf .build-publication-lock/result result || exit 1
 fi

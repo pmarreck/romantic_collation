@@ -42,6 +42,7 @@
           fileset = pkgs.lib.fileset.unions [ ./build.zig ./build.zig.zon ./src ./include ./cli
             ./tests/unit/cli_key_failure.c ./tests/unit/cli_key_arena.c ./tests/unit/ffi_contract.c ];
         };
+        installCliAlias = ''ln -s collate "$out/bin/romantic-collate"'';
         mkCore = extra: pkgs.stdenv.mkDerivation {
           inherit pname version;
           src = coreSource;
@@ -52,6 +53,11 @@
             export HOME=$TMPDIR
             ${pkgs.lib.optionalString pkgs.stdenv.isDarwin "unset NIX_CFLAGS_COMPILE NIX_LDFLAGS"}
             zig build ${extra} --prefix $out
+            # Windows packages have collate.exe and must not require symlinks.
+            if [[ ! -f "$out/bin/collate.exe" ]]; then
+              test -x "$out/bin/collate"
+              ${installCliAlias}
+            fi
           '';
           dontInstall = true;
         };
@@ -97,7 +103,11 @@
               ${core}/lib/libromantic_collation.a -lm \
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux "-ldl -lpthread"} -o collate
           '';
-          installPhase = ''mkdir -p $out/bin; cp collate $out/bin/'';
+          installPhase = ''
+            mkdir -p "$out/bin"
+            cp collate "$out/bin/"
+            ${installCliAlias}
+          '';
         };
         mkCli = mkCliWith "-O3 -DNDEBUG";
         rustDebug = rustCore.overrideAttrs (_: {
@@ -283,6 +293,8 @@
               export RCOL_RUST_LIBRARY=${rustCore}
               export RCOL_ZIG_CLI=${mkCli hostCore}/bin/collate
               export RCOL_RUST_CLI=${mkCli rustCore}/bin/collate
+              export RCOL_DEFAULT_CLI=${self.packages.${system}.default}/bin/collate
+              export RCOL_RUST_PRODUCT_CLI=${self.packages.${system}.rust}/bin/collate
               export RCOL_PARITY=${parity}/bin/backend-parity
               export RCOL_ZIG_SHARED=${zigShared}/lib/libromantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
               export RCOL_RUST_SHARED=${rustCore}/lib/libromantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}

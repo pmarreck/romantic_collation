@@ -443,9 +443,10 @@ virtue of being unrecognized.
 
 ## Naming
 
-The CLI binary is provisionally named **`collate`** — a single clean word. It can
-be renamed without touching the library (the library symbols are
-`rcol_*`).
+**`collate`** is the canonical command. On Linux and macOS, the package and
+`./build` also provide **`romantic-collate`**, a relative symlink to `collate`
+in the same `bin` directory. Use it to disambiguate another `collate` on your
+`PATH`. Windows packages retain `collate.exe` without a symlink.
 
 ## License
 

@@ -80,5 +80,5 @@ See [README.md](README.md) for build, deployment, and qualification limits.
 - Zig package/module/static-lib: `romantic_collation`
 - C FFI symbol prefix: `rcol_`
 - C header: `include/romantic_collation.h`
-- CLI binary (hyphenated): `collate` (provisional — see README for rename note)
+- CLI binary: `collate`; Linux/macOS alias: `romantic-collate`
 - Default git branch: `yolo`
