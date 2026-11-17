@@ -15,10 +15,11 @@
 //! Design intent: an opinionated, locale-free, reproducible alternative to
 //! glibc `strcoll` (non-reproducible across glibc versions, absent in musl) and
 //! ICU (heavy). Technique: UCA-flavored multi-level collation elements with a
-//! deliberate structural-first primary level (whitespace/punctuation are NOT
-//! ignored, unlike UCA) and length-prefixed numeric runs for natural sort.
+//! fixed structural-first primary level (whitespace/punctuation are NOT
+//! ignored; UCA supports this too) and length-prefixed numeric runs for natural sort.
 
 const std = @import("std");
+const structural = @import("structural_data.zig");
 const word_break = @import("word_break_data.zig");
 
 // ─── Option bits (mirror the C header) ───────────────────────────────────
@@ -586,10 +587,7 @@ fn emitExpansion(l1: *L1, l2: *L1, l3: *L1, alloc: std.mem.Allocator, rep: []con
 
 /// Is this code point whitespace for structural-first purposes?
 fn isSpace(cp: u21) bool {
-    return switch (cp) {
-        ' ', '\t', '\n', '\r', 0x0B, 0x0C, 0x00A0, 0x2009, 0x202F => true,
-        else => false,
-    };
+    return structural.isSpace(cp);
 }
 
 test "space classifier includes supported Unicode spaces and rejects lookalikes" {
@@ -1187,12 +1185,16 @@ fn pushNumericPrimary(l1: *L1, alloc: std.mem.Allocator, run: []const u8) !void 
 /// followed by the code point encoded big-endian in base-253 (+WEIGHT_BASE),
 /// so bytewise comparison preserves code-point order and sorts after letters.
 fn pushOtherPrimary(l1: *L1, alloc: std.mem.Allocator, cp: u21) !void {
+    try l1.append(alloc, CLASS_OTHER);
+    try pushCodepoint(l1, alloc, cp);
+}
+
+fn pushCodepoint(l1: *L1, alloc: std.mem.Allocator, cp: u21) !void {
     const v: u32 = cp;
     const b2: u8 = @intCast(v / (253 * 253));
     const r: u32 = v % (253 * 253);
     const b1: u8 = @intCast(r / 253);
     const b0: u8 = @intCast(r % 253);
-    try l1.append(alloc, CLASS_OTHER);
     try l1.append(alloc, WEIGHT_BASE + b2);
     try l1.append(alloc, WEIGHT_BASE + b1);
     try l1.append(alloc, WEIGHT_BASE + b0);
@@ -1362,10 +1364,17 @@ pub fn sortKeyAlloc(alloc: std.mem.Allocator, options: u32, s: []const u8) ![]u8
             // count the spelled-out form produces, or the two stop sorting
             // adjacent — which is the entire point of an expansion.
             try emitExpansion(&l1, &l2, &l3, alloc, rep, roman);
-        } else if (cp < 0x80 and (b > ' ')) {
-            // ASCII punctuation/symbol: ordered among itself by code point.
+        } else if ((cp < 0x80 and b > ' ') or structural.isPunctuation(cp)) {
+            // Preserve ASCII keys, including their legacy symbol treatment.
+            // 0xFF places every non-ASCII punctuation scalar after ASCII
+            // punctuation, then base-253 bytes preserve scalar order.
             try l1.append(alloc, CLASS_PUNCT);
-            try l1.append(alloc, b); // 0x21..0x7E, all >= 0x02
+            if (cp < 0x80) {
+                try l1.append(alloc, b);
+            } else {
+                try l1.append(alloc, 0xFF);
+                try pushCodepoint(&l1, alloc, cp);
+            }
             try l2.append(alloc, WEIGHT_BASE + D_NONE);
             try l3.append(alloc, CASE_NEUTRAL);
         } else {

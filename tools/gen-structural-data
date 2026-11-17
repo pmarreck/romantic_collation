@@ -1,0 +1,69 @@
+#!/usr/bin/env luajit
+-- Production ranges come from Unicode properties, never from locale settings.
+local unicode_path = assert(arg[1], 'usage: gen-structural-data UnicodeData.txt PropList.txt OUTPUT')
+local properties_path = assert(arg[2], 'missing PropList.txt')
+local output_path = assert(arg[3], 'missing output')
+local unicode_hash = '2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c'
+local properties_hash = '130dcddcaadaf071008bdfce1e7743e04fdfbc910886f017d9f9ac931d8c64dd'
+local function verify(path, expected)
+	local pipe = assert(io.popen("sha256sum -- '" .. path:gsub("'", "'\\''") .. "'", 'r'))
+	local line = assert(pipe:read('*l')); assert(pipe:close())
+	assert(line:match('^(%x+)') == expected, 'unexpected Unicode source hash: ' .. path)
+end
+verify(unicode_path, unicode_hash); verify(properties_path, properties_hash)
+local punctuation, spaces = {}, {}
+for line in io.lines(unicode_path) do
+	local cp, category = line:match('^(%x+);[^;]*;([^;]+);')
+	assert(cp and category, 'invalid UnicodeData row')
+	if category:sub(1, 1) == 'P' then punctuation[#punctuation+1] = {tonumber(cp,16), tonumber(cp,16)} end
+end
+for line in io.lines(properties_path) do
+	local range, property = line:match('^([%x%.]+)%s*;%s*([%w_]+)')
+	if property == 'White_Space' then
+		local first, last = range:match('^(%x+)%.%.(%x+)$')
+		first = first or range; last = last or first
+		spaces[#spaces+1] = {tonumber(first,16), tonumber(last,16)}
+	end
+end
+local function merge(ranges)
+	table.sort(ranges, function(a,b) return a[1] < b[1] end)
+	local result = {}
+	for _, range in ipairs(ranges) do
+		local prior = result[#result]
+		if prior and range[1] == prior[2]+1 then prior[2] = range[2]
+		else assert(not prior or prior[2] < range[1]); result[#result+1] = range end
+	end
+	return result
+end
+assert(#punctuation > 800 and #spaces > 5, 'empty/truncated Unicode sources')
+punctuation, spaces = merge(punctuation), merge(spaces)
+local out = assert(io.open(output_path, 'w'))
+out:write('//! Generated Unicode 17.0.0 structural properties. DO NOT EDIT.\n')
+out:write('//! Sources: https://www.unicode.org/Public/17.0.0/ucd/{UnicodeData,PropList}.txt\n')
+out:write('//! UnicodeData SHA-256: ', unicode_hash, '\n//! PropList SHA-256: ', properties_hash, '\n')
+out:write('//! Regenerate: tools/gen-structural-data UnicodeData.txt PropList.txt src/structural_data.zig\n\n')
+out:write('pub const Range = struct { first: u21, last: u21 };\n')
+for _, item in ipairs({{'whitespace', spaces}, {'punctuation', punctuation}}) do
+	out:write('pub const ', item[1], ' = [_]Range{\n')
+	for _, range in ipairs(item[2]) do out:write(string.format('    .{ .first = 0x%X, .last = 0x%X },\n', range[1], range[2])) end
+	out:write('};\n\n')
+end
+out:write('pub fn isSpace(cp: u21) bool {\n    return switch (cp) {\n')
+for _, range in ipairs(spaces) do
+	local pattern = string.format('0x%X', range[1])
+	if range[1] ~= range[2] then pattern = pattern .. string.format('...0x%X', range[2]) end
+	out:write('        ', pattern, ' => true,\n')
+end
+out:write('        else => false,\n    };\n}\n\n')
+out:write([[pub fn isPunctuation(cp: u21) bool {
+    var lo: usize = 0;
+    var hi: usize = punctuation.len;
+    while (lo < hi) {
+        const mid = lo + (hi - lo) / 2;
+        const range = punctuation[mid];
+        if (cp < range.first) hi = mid else if (cp > range.last) lo = mid + 1 else return true;
+    }
+    return false;
+}
+]])
+assert(out:close())

@@ -29,6 +29,14 @@
         pname = "romantic_collation";
         version = "0.1.0";
         zigPkg = zig-overlay.packages.${system}."0.17.1";
+        unicodeData = pkgs.fetchurl {
+          url = "https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt";
+          hash = "sha256-Lh78HctZxXXu31zK5g+VIp9wbubQMYNSR9hDwR2WRww=";
+        };
+        unicodeProperties = pkgs.fetchurl {
+          url = "https://www.unicode.org/Public/17.0.0/ucd/PropList.txt";
+          hash = "sha256-Ew3N3Kra8HEAi9/OHndD4E/fvJEIhvAX2fmskx2MZN0=";
+        };
         coreSource = pkgs.lib.fileset.toSource {
           root = ./.;
           fileset = pkgs.lib.fileset.unions [ ./build.zig ./build.zig.zon ./src ./include ./cli
@@ -123,6 +131,22 @@
               ${rustCore}/lib/libromantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
           '';
         };
+        structuralCheck = pkgs.stdenv.mkDerivation {
+          pname = "romantic-unicode-structure";
+          inherit version;
+          src = pkgs.lib.fileset.toSource { root = ./.; fileset = ./tests/unit/structural_unicode.c; };
+          dontConfigure = true;
+          buildPhase = ''
+            $CC -O2 -std=c11 -Wall -Wextra -Werror -I${hostCore}/include tests/unit/structural_unicode.c \
+              ${pkgs.lib.optionalString pkgs.stdenv.isLinux "-ldl"} -o unicode-structure
+          '';
+          installPhase = ''mkdir -p $out/bin; cp unicode-structure $out/bin/'';
+          doInstallCheck = true;
+          installCheckPhase = ''
+            $out/bin/unicode-structure ${zigShared}/lib/libromantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} ${unicodeData} ${unicodeProperties}
+            $out/bin/unicode-structure ${rustCore}/lib/libromantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} ${unicodeData} ${unicodeProperties}
+          '';
+        };
         elixirNif = pkgs.stdenv.mkDerivation {
           pname = "romantic-elixir-nif";
           inherit version;
@@ -185,7 +209,7 @@
           installPhase = ''
             mkdir -p $out/lib $out/share/postgresql/extension
             cp romantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary} $out/lib/
-            cp db/romantic_collation.control db/romantic_collation--1.0.sql $out/share/postgresql/extension/
+            cp db/romantic_collation.control db/romantic_collation--2.0.sql $out/share/postgresql/extension/
           '';
         };
       in {
@@ -200,6 +224,7 @@
         packages.zig-cli = mkCli hostCore;
         packages.zig-oracle = zigShared;
         packages.backend-parity = parity;
+        packages.unicode-structure = structuralCheck;
         packages.elixir-nif = elixirNif;
         packages.sqlite-extension = sqliteExtension;
         packages.postgres-extension = postgresExtension;
@@ -219,6 +244,7 @@
         # resolves, so the targets in .mechatron-prime/targets would not exist.
         checks = {
           parity = parity;
+          structural = structuralCheck;
           elixir = elixirCheck;
           build = self.packages.${system}.default;
           cross = pkgs.linkFarm "romantic-cross-targets" (map (name: {
@@ -252,7 +278,7 @@
               export HOME=$TMPDIR
               export RCOL_SQLITE_EXTENSION=${sqliteExtension}/lib/romantic${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
               export RCOL_PG_EXTENSION=${postgresExtension}/lib/romantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
-              export RCOL_PG_SQL=${postgresExtension}/share/postgresql/extension/romantic_collation--1.0.sql
+              export RCOL_PG_SQL=${postgresExtension}/share/postgresql/extension/romantic_collation--2.0.sql
               export RCOL_LIBRARY=${hostCore}
               export RCOL_RUST_LIBRARY=${rustCore}
               export RCOL_ZIG_CLI=${mkCli hostCore}/bin/collate
@@ -262,6 +288,9 @@
               export RCOL_RUST_SHARED=${rustCore}/lib/libromantic_collation${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}
               export RCOL_ELIXIR_LOG=${elixirCheck}/test.log
               export RCOL_COREUTILS=${pkgs.coreutils}
+              export RCOL_STRUCTURE_ORACLE=${structuralCheck}/bin/unicode-structure
+              export RCOL_UNICODE_DATA=${unicodeData}
+              export RCOL_PROP_LIST=${unicodeProperties}
               ${pkgs.lib.optionalString pkgs.stdenv.isDarwin "unset NIX_CFLAGS_COMPILE NIX_LDFLAGS"}
               timeout 600 ${pkgs.bash}/bin/bash ./test > test.log 2>&1 || { cat test.log; exit 1; }
             '';

@@ -74,6 +74,10 @@ fn expansion(cp: u32) -> Option<&'static [u8]> {
         .ok()
         .map(|i| tables::EXPANSIONS[i].1)
 }
+fn punctuation(cp: u32) -> bool {
+    let pos = tables::PUNCTUATION.partition_point(|r| r.0 <= cp);
+    pos > 0 && cp <= tables::PUNCTUATION[pos - 1].1
+}
 fn word(s: &[u8], i: usize) -> (u8, usize) {
     let Some((cp, n)) = decode(s, i) else {
         return (WB_OTHER, i + 1);
@@ -592,7 +596,7 @@ pub(super) fn sort_key(s: &[u8], options: u32) -> Result<Vec<u8>> {
             i += 1;
             continue;
         };
-        if matches!(cp, 9..=13 | 32 | 0xa0 | 0x2009 | 0x202f) {
+        if tables::is_space(cp) {
             out.p.push(0x10)?;
             out.weights(2, 2)?;
         } else if let Some((base, mut dia, upper)) = folded(cp) {
@@ -609,8 +613,18 @@ pub(super) fn sort_key(s: &[u8], options: u32) -> Result<Vec<u8>> {
             continue;
         } else if let Some(rep) = expansion(cp) {
             out.expansion(rep, use_roman)?;
-        } else if cp < 128 && b > 32 {
-            out.p.extend(&[0x20, b])?;
+        } else if (cp < 128 && b > 32) || punctuation(cp) {
+            out.p.push(0x20)?;
+            if cp < 128 {
+                out.p.push(b)?;
+            } else {
+                out.p.extend(&[
+                    0xff,
+                    2 + (cp / (253 * 253)) as u8,
+                    2 + ((cp % (253 * 253)) / 253) as u8,
+                    2 + (cp % 253) as u8,
+                ])?;
+            }
             out.weights(2, 2)?;
         } else {
             out.other(cp)?;

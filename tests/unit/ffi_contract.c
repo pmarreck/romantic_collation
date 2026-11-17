@@ -16,7 +16,7 @@ int main(void) {
 	size_t need = 0;
 	rcol_collator *coll = NULL;
 	rcol_config cfg = RCOL_CONFIG_INIT(RCOL_CODE_POINT);
-	CHECK(rcol_ordering_version() == 1);
+	CHECK(rcol_ordering_version() == RCOL_ORDERING_VERSION);
 	CHECK(strcmp(rcol_version(), "0.1.0") == 0);
 	CHECK(strcmp(rcol_status_name(RCOL_INTERNAL_ERROR), "internal error") == 0);
 	if (rcol_open(&cfg, &coll) != RCOL_OK || !coll) return 1;

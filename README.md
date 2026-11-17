@@ -23,7 +23,13 @@ identical** results on glibc, musl, macOS, and Windows.
 There is an escape hatch: `--code-point` gives you exact `LC_ALL=C sort` order.
 
 SQLite and PostgreSQL extensions now expose indexable binary sort keys:
-`ORDER BY romantic_key_v1(name)`. See [database setup and examples](docs/DATABASES.md).
+`ORDER BY romantic_key_v2(name)`. See [database setup and examples](docs/DATABASES.md).
+Ordering revision 2 recognizes all Unicode 17.0.0 `White_Space` characters and
+`P*` punctuation categories. For example, `a  < a— < aa`. All whitespace shares
+the existing space weight; punctuation retains code-point order within its class.
+Non-ASCII symbol ordering and language-specific alphabet choices are unchanged.
+Stored keys/indexes from revision 1 must be recomputed; SQL now uses
+`romantic_key_v2` (PostgreSQL extension 2.0). C ABI signatures are unchanged.
 The compiler is pinned to Zig 0.17.1; correctness tests run with runtime safety enabled.
 Zig remains the ordering oracle. An independent, dependency-free Rust core
 (Rust 1.100.0) provides the same key bytes and checked C ABI, plus a Rust-backed
@@ -40,7 +46,7 @@ In priority order:
 
 1. **Structural-first.** `whitespace < punctuation < digits < letters`.
    Whitespace and punctuation are significant and sort *before* alphanumerics
-   (this is the deliberate deviation from the Unicode Collation Algorithm).
+   (UCA/CLDR can also retain punctuation; this library fixes one house policy).
    So: `thing < "thing " < thing2 < thingthing`, and `"test with spaces" < test1`.
    *Spaces before letters. COME ON.*
 2. **Natural numeric runs, arbitrary precision.** `file2 < file10` — digit runs
@@ -114,19 +120,25 @@ nix build .#postgres-extension --out-link result-postgres
 After loading the matching extension:
 
 ```sql
-SELECT name FROM items ORDER BY romantic_key_v1(name);
-CREATE INDEX items_romantic_v1 ON items(romantic_key_v1(name));
+SELECT name FROM items ORDER BY romantic_key_v2(name);
+CREATE INDEX items_romantic_v2 ON items(romantic_key_v2(name));
 ```
 
 Both engines return binary keys and support expression indexes. These functions
 provide ordering through `ORDER BY`; they do not change text `=` or `LIKE`, or
 install a native `COLLATE` provider. NULLs propagate. Optional integer options
-match the C API, for example `romantic_key_v1(name, 64)` enables Roman numerals.
+match the C API, for example `romantic_key_v2(name, 64)` enables Roman numerals.
 Equal keys can represent different strings, and a UNIQUE key index enforces
 that equivalence. Keep ordering revisions/options fixed for each index; rebuild
 stored keys and indexes when migrating them. PostgreSQL needs a UTF8 database
 and a module compiled for its server major. Full setup and migration guidance:
 [docs/DATABASES.md](docs/DATABASES.md).
+
+For standard multilingual collation in a PostgreSQL build with ICU support,
+an extension is not necessary: `CREATE COLLATION natural_root (provider = icu,
+locale = 'und-u-kn-true');` supplies root numeric collation. Use this library's
+extension when its custom house/numeric semantics or binary keys are wanted.
+See [PostgreSQL's ICU collation documentation](https://www.postgresql.org/docs/current/collation.html).
 
 ## Rust and Elixir
 

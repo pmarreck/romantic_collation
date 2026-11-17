@@ -63,9 +63,9 @@ See [README.md](README.md) for build, deployment, and qualification limits.
 - **House style**: the default opinionated order (structural-first, natural
   numeric, case-insensitive base, most diacritics secondary, selected global
   Spanish/Romanian primary letters, case tertiary).
-- **Structural-first**: whitespace and punctuation sort BEFORE alphanumerics and
-  are NOT ignored (the deliberate deviation from the Unicode Collation
-  Algorithm, which makes punctuation ignorable). Yields "space before letters"
+- **Structural-first**: Unicode whitespace and punctuation sort BEFORE alphanumerics
+  and are NOT ignored (a fixed policy; UCA also supports non-ignorable punctuation).
+  Yields "space before letters"
   and "shorter-prefix-before-longer".
 - **Code-point mode**: the escape hatch (`RCOL_CODE_POINT`) = pure UTF-8
   byte order = `LC_ALL=C sort`.

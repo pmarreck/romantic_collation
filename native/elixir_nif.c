@@ -7,7 +7,7 @@
 typedef struct { rcol_collator *coll[128]; } state;
 static int load(ErlNifEnv *env,void **private,ERL_NIF_TERM info) {
 	(void)env; (void)info;
-	if (rcol_ordering_version()!=1) return -1;
+	if (rcol_ordering_version()!=RCOL_ORDERING_VERSION) return -1;
 	state *s=enif_alloc(sizeof *s);if (!s) return -1;
 	memset(s,0,sizeof *s);
 	for (unsigned i=0;i<128;i++) {

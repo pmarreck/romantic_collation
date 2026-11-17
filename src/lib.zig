@@ -71,7 +71,7 @@ export fn rcol_version() callconv(.c) [*:0]const u8 {
 
 /// Identifies the serialized key format and ordering semantics for indexes.
 export fn rcol_ordering_version() callconv(.c) u32 {
-    return 1;
+    return 2;
 }
 
 fn openWithAllocator(allocator: std.mem.Allocator, config: ?*const Config, out: ?*?*Collator) Status {

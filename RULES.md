@@ -14,8 +14,10 @@ changing one changes the *product*, not just an implementation detail.
 1. **Structural-first ordering.** In house style, the primary comparison class
    order is `whitespace < punctuation < digits < letters`. Whitespace and
    punctuation are significant and sort BEFORE alphanumerics — they are NOT
-   ignored (this is the deliberate deviation from the Unicode Collation
-   Algorithm). "Spaces before letters, COME ON." Consequences that MUST hold:
+   ignored. UCA/CLDR also supports non-ignorable punctuation; the invariant here
+   is our explicit fixed house policy, not a claim that UCA cannot do this.
+   Whitespace means Unicode `White_Space`; punctuation means `General_Category=P*`.
+   "Spaces before letters, COME ON." Consequences that MUST hold:
    `thing < "thing " < thing2 < thingthing` and `"test with spaces" < test1`.
 
 2. **No OS locale, ever.** The library reads nothing from the environment — no

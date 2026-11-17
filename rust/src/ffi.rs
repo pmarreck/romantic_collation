@@ -37,7 +37,7 @@ pub extern "C" fn rcol_version() -> *const std::ffi::c_char {
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn rcol_ordering_version() -> u32 {
-    1
+    2
 }
 
 /// # Safety

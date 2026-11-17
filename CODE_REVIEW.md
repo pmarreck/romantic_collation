@@ -126,3 +126,69 @@ Additional adoption limits:
   ordering-revision decision, not a silent port correction.
 - Linux amd64 ran natively. The four other Zig targets compiled; Rust/NIF
   foreign runtime execution and hot NIF upgrades are not qualified.
+
+## Localization review, 2026-11-17
+
+Kip's [reproducible comparison](https://github.com/elixir-localize/collation_bench)
+uses this project's `0cf9582` and Localize 1.8.0. Its reported timings are valid
+end-to-end Elixir sorting measurements, not isolated core-comparator timings.
+Localize's ICU NIF generates keys and sorts natively; this project's NIF batches
+key generation but leaves sorting to Elixir. Allocation/copy reduction and native
+batch sorting are candidates for measured follow-up, not established speedups.
+The agreement sample contains 4,000 random pairs across four Latin-string lengths,
+not all pairs in a 1,000-string set. Eleven differences do not establish accuracy
+for other scripts or locales. The full throughput benchmark was not rerun here.
+
+### DCR-006: Unicode structural coverage was incomplete (resolved)
+
+Medium severity, high confidence, reproduced against the prior packaged CLI.
+`a` followed by EN SPACE or EM DASH sorted after `aa`, contradicting the
+structural-first contract. Revision 2 uses pinned Unicode 17 `White_Space` and
+`P*` categories in both implementations. Existing ASCII symbol policy, alphabet
+weights, numeric policy, and code-point mode remain unchanged. SQL v2 names and
+PostgreSQL extension 2.0 make the ordering change explicit; rebuild old keys and
+dependent indexes rather than rebinding v1 functions silently.
+
+An independently compiled C consumer parses the original Unicode files, without
+using generated production ranges. Against each public ABI it exhausts 1,112,064
+Unicode scalars, verifies all 25 whitespace characters and all 856 punctuation
+characters, rejects whitespace false positives, and checks unchanged code-point
+keys. The old Rust backend fails this control at U+0085. Shared CLI regressions
+also failed before the correction. The complete corrected suite passes 2,760
+checks, including both backends, real database engines, and Elixir integration.
+
+### DCR-007: CLI equal-key order is deterministic but not stable (open)
+
+The CLI currently breaks equal keys by raw line bytes and reverses completed
+output for descending order. Neither retains input order for collation-equal
+values. Elixir's existing sort is stable. The owner requested stable CLI sorting;
+ascending, descending, unique representative, and selected-field semantics need
+explicit regression coverage in the next increment.
+
+### Policy distinctions, not automatic defects
+
+- Root numeric CLDR is the closest standard comparison, but our signed decimal,
+  arbitrary-width scientific, and optional Roman interpretation differ. ICU
+  numeric collation does not parse signs, fractions, or exponents and limits a
+  numeric unit to 254 significant digits. PostgreSQL can already use ICU root
+  numeric collation without this extension when built with ICU support.
+- Digits are not ASCII-only: fullwidth digits and five mathematical digit
+  alphabets are supported. Arabic-Indic and other Unicode decimal sets are not.
+- Spanish/Romanian primary letters are intentional house tailoring, not CLDR
+  root behavior. Missing Latin folds, non-Latin case/script behavior, and absent
+  full canonical normalization remain adoption limitations, not solved by the
+  structural correction. Non-ASCII symbols still follow letters; ASCII symbols
+  retain the legacy punctuation bucket.
+- UCA does not inherently ignore punctuation. An ICU 76.1 functional probe with
+  root numeric, non-ignorable settings reproduced the four structural examples
+  in the README, as well as `a` + EN SPACE/EM DASH before `aa`. Earlier claims
+  that these examples distinguish this library from UCA have been corrected.
+- For mixed locales, Unicode recommends one ordering for the intended audience
+  across the collection, not per-string locale guesses. No universal order can
+  simultaneously give German and Swedish positions to the same letter. Root
+  numeric is a sensible multilingual baseline; retaining the house tailoring is
+  a separate owner policy choice. No CLDR-default migration was implemented.
+
+Primary references: [Unicode mixed-language FAQ](https://www.unicode.org/faq/collation.html),
+[ICU numeric attributes](https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/ucol_8h.html),
+and [PostgreSQL ICU collations](https://www.postgresql.org/docs/current/collation.html).

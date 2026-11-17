@@ -8,7 +8,7 @@ static void key(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
 	if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
 	    (argc == 2 && sqlite3_value_type(argv[1]) == SQLITE_NULL)) return;
 	if (sqlite3_value_type(argv[0]) != SQLITE_TEXT) {
-		sqlite3_result_error(ctx, "romantic_key_v1 requires TEXT", -1);
+		sqlite3_result_error(ctx, "romantic_key_v2 requires TEXT", -1);
 		return;
 	}
 	sqlite3_int64 options = 0;
@@ -57,10 +57,10 @@ __declspec(dllexport)
 int sqlite3_romantic_init(sqlite3 *db, char **error, const sqlite3_api_routines *api) {
 	(void)error;
 	SQLITE_EXTENSION_INIT2(api);
-	if (rcol_ordering_version() != 1) return SQLITE_MISMATCH;
+	if (rcol_ordering_version() != RCOL_ORDERING_VERSION) return SQLITE_MISMATCH;
 	int flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS;
-	int rc = sqlite3_create_function_v2(db, "romantic_key_v1", 1, flags, NULL, key, NULL, NULL, NULL);
+	int rc = sqlite3_create_function_v2(db, "romantic_key_v2", 1, flags, NULL, key, NULL, NULL, NULL);
 	if (rc == SQLITE_OK)
-		rc = sqlite3_create_function_v2(db, "romantic_key_v1", 2, flags, NULL, key, NULL, NULL, NULL);
+		rc = sqlite3_create_function_v2(db, "romantic_key_v2", 2, flags, NULL, key, NULL, NULL, NULL);
 	return rc;
 }

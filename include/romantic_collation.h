@@ -113,6 +113,7 @@ typedef int32_t rcol_status;
 #define RCOL_GREATER    1
 
 #define RCOL_ABI_VERSION 1u
+#define RCOL_ORDERING_VERSION 2u
 
 /* `struct_size` permits future fields to be appended without breaking callers;
  * `abi_version` changes only when an incompatible ABI is introduced. */
@@ -138,8 +139,8 @@ typedef struct rcol_collator rcol_collator;
 const char *rcol_version(void);
 
 /* Ordering/key revision, independent of the library and C ABI versions.
- * Revision 1 identifies the current keys. Recompute scientific-mode keys from
- * older unversioned builds, which had exponent and mantissa defects.
+ * Revision 2 recognizes Unicode 17 White_Space and P* punctuation throughout
+ * house style. Recompute stored keys and indexes made by earlier revisions.
  * Persist options with stored keys;
  * never mix revisions/options in an index. An ordering change requires a new
  * SQL function revision and rebuilding affected indexes/materialized keys.

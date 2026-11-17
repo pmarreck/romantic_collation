@@ -8,13 +8,13 @@
 #include "romantic_collation.h"
 
 PG_MODULE_MAGIC;
-PG_FUNCTION_INFO_V1(romantic_key_v1);
+PG_FUNCTION_INFO_V1(romantic_key_v2);
 
-Datum romantic_key_v1(PG_FUNCTION_ARGS) {
-	if (rcol_ordering_version() != 1)
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("romantic_key_v1 requires ordering revision 1")));
+Datum romantic_key_v2(PG_FUNCTION_ARGS) {
+	if (rcol_ordering_version() != RCOL_ORDERING_VERSION)
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("romantic_key_v2 requires ordering revision 2")));
 	if (GetDatabaseEncoding() != PG_UTF8)
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("romantic_key_v1 requires a UTF8 database")));
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("romantic_key_v2 requires a UTF8 database")));
 	text *input = PG_GETARG_TEXT_PP(0);
 	int32 options = PG_GETARG_INT32(1);
 	if (options < 0)

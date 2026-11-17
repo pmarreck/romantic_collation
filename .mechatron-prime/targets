@@ -7,3 +7,4 @@ checks.x86_64-linux.test
 checks.x86_64-linux.cross
 checks.x86_64-linux.parity
 checks.x86_64-linux.elixir
+checks.x86_64-linux.structural

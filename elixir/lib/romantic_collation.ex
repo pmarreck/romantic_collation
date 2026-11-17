@@ -18,7 +18,7 @@ defmodule RomanticCollation do
   @moduledoc """
   Reproducible collation through the Rust core, verified against the Zig oracle.
 
-  Keys are opaque binaries for ordering revision 1. Equal collation keys may
+  Keys are opaque binaries for ordering revision 2. Equal collation keys may
   represent different source binaries; ordinary Elixir `==` remains unchanged.
   Invalid UTF-8 and embedded NULs are accepted as explicit-length binaries.
   Native computation runs on BEAM's dirty CPU schedulers.

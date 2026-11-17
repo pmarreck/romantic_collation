@@ -54,7 +54,7 @@ fi
 # ── unknown option => exit 2, message on stderr (not stdout) ──
 for lang in en de fr es it pt_br ca ro; do
 	out=$("$CLI" --lang "$lang" --help 2>/dev/null)
-	if [[ "$out" == *'romantic_key_v1(name)'* && "$out" == *'docs/DATABASES.md'* ]]; then
+	if [[ "$out" == *'romantic_key_v2(name)'* && "$out" == *'docs/DATABASES.md'* ]]; then
 		pass "database help is discoverable in $lang"
 	else
 		fail "database help missing in $lang"

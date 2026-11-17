@@ -4,6 +4,10 @@ Completed work is preserved in [the log](docs/PLAN_LOG.md). Earlier design ideas
 
 ## Library polish
 
+- [x] Fix Unicode whitespace/punctuation coverage in the Zig oracle and Rust backend using pinned Unicode 17 data; both public ABIs pass independent exhaustive scalar checks and the old backend fails the negative control (done 2026-11-17 09:30 EST).
+- [x] Publish ordering revision 2 and SQL v2 names; documentation, review findings, and NIF/CLI/database regressions pass without changing symbol or alphabet policy; full suite: 2760 passed, 0 failed (done 2026-11-17 09:30 EST).
+- [ ] Preserve CLI input order for equal keys in both directions and retain the first input representative with unique filtering; resolve selected-field tie behavior and qualify regressions.
+- [ ] Qualify the complete suite, parity, foreign Zig builds, and exact-commit CI; ship the Unicode structural-order correction.
 - [x] Push the polish commits and verify exact-commit Mechatron CI and the dynamic README badge. Answer: origin/yolo equals 9fa299f; all six targets passed and both the badge endpoint and README image report PASSING (done 2026-11-15 17:19 EST; commit 9fa299f).
 - [x] Keep collation equality as disclosed behavior without changing ordering revision 1; SQL and Elixir equality remain distinct from byte identity (done 2026-11-15 17:07 EST; commit f652b03).
 - [x] Reduce CLI peak memory from 314368 to 173056 KiB on one million lines with identical output; stable-page resource and error regressions pass (done 2026-11-15 17:07 EST; commit 036b246).

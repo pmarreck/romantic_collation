@@ -50,4 +50,11 @@ defmodule RomanticCollationTest do
     assert_raise ArgumentError, fn -> RomanticCollation.key(:not_a_binary) end
     assert_raise ArgumentError, fn -> RomanticCollation.keys(["a", :bad]) end
   end
+
+  test "Unicode whitespace and punctuation remain structural before letters" do
+    assert RomanticCollation.sort(["aa", "a—", "a\u2002"]) == ["a\u2002", "a—", "aa"]
+    assert RomanticCollation.equal?("a ", "a\u2002")
+    assert RomanticCollation.compare("a€", "aa") == :gt
+    assert RomanticCollation.compare("a—", "aa", code_point: true) == :gt
+  end
 end

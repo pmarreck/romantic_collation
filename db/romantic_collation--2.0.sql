@@ -1,0 +1,4 @@
+CREATE FUNCTION romantic_key_v2(text, integer DEFAULT 0)
+RETURNS bytea
+AS 'MODULE_PATHNAME', 'romantic_key_v2'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;

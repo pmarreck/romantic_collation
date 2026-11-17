@@ -1,6 +1,6 @@
 # SQLite and PostgreSQL
 
-Both adapters expose `romantic_key_v1(text [, options])`. The result is a binary
+Both adapters expose `romantic_key_v2(text [, options])`. The result is a binary
 key (SQLite BLOB, PostgreSQL bytea). Binary ordering matches the C comparator,
 including natural numbers, structural-first ordering, and Latin letter rules.
 NULL input or NULL options yield NULL. Options default to zero, the house order.
@@ -9,7 +9,7 @@ The option bits match `include/romantic_collation.h`: decimal = 8, scientific =
 indexed expressions. Code-point mode = 1; decimal comma adds 16.
 
 These are sort-key functions, not a PostgreSQL collation provider or a SQLite
-`COLLATE` callback. Use `ORDER BY romantic_key_v1(name)`. The SQLite comparison
+`COLLATE` callback. Use `ORDER BY romantic_key_v2(name)`. The SQLite comparison
 callback has no error return, so allocation errors cannot safely become equality
 or a different ordering. SQL scalar functions can fail the statement instead.
 
@@ -24,10 +24,10 @@ sqlite3 example.db
 .load ./result-sqlite/lib/romantic
 CREATE TABLE items(name TEXT);
 INSERT INTO items VALUES ('file10'), ('file2'), ('apple'), ('Apple');
-SELECT name FROM items ORDER BY romantic_key_v1(name);
+SELECT name FROM items ORDER BY romantic_key_v2(name);
 -- apple, Apple, file2, file10 (one value per row)
-CREATE INDEX items_romantic_v1 ON items(romantic_key_v1(name));
-EXPLAIN QUERY PLAN SELECT name FROM items ORDER BY romantic_key_v1(name);
+CREATE INDEX items_romantic_v2 ON items(romantic_key_v2(name));
+EXPLAIN QUERY PLAN SELECT name FROM items ORDER BY romantic_key_v2(name);
 ```
 
 Load the extension on each connection before reading or writing tables with its
@@ -50,13 +50,13 @@ between server majors. Use a UTF8 database. A server administrator can register
 the built module using an absolute path visible to the server:
 
 ```sql
-CREATE FUNCTION romantic_key_v1(text, integer DEFAULT 0)
+CREATE FUNCTION romantic_key_v2(text, integer DEFAULT 0)
 RETURNS bytea AS '/absolute/path/result-postgres/lib/romantic_collation',
-                'romantic_key_v1'
+                'romantic_key_v2'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-SELECT name FROM items ORDER BY romantic_key_v1(name);
-CREATE INDEX items_romantic_v1 ON items(romantic_key_v1(name));
+SELECT name FROM items ORDER BY romantic_key_v2(name);
+CREATE INDEX items_romantic_v2 ON items(romantic_key_v2(name));
 ```
 
 The package also includes `romantic_collation.control` and its installation SQL
@@ -68,15 +68,20 @@ registration above is sufficient without modifying the server installation.
 
 ## Indexes, equality, and upgrades
 
-`v1` identifies ordering revision 1, also reported by `rcol_ordering_version()`.
-Library version and C ABI version are separate. Revision 1 fixes an older
-scientific-exponent cutoff and canonicalizes equivalent scientific mantissas
-such as `10e0` and `1e1`. Recompute all scientific-mode keys stored by older
-unversioned builds when adopting this revision. Other modes preserve their
-keys. A future ordering change must use a new function revision rather than
-silently replacing `v1`. Recompute stored keys and rebuild indexes when moving
-to another revision or changing options. Retain the old module while any index
-still depends on it. Back up data and coordinate connections before migration.
+`v2` identifies ordering revision 2, also reported by `rcol_ordering_version()`.
+Library version and C ABI version are separate. Revision 2 fixes structural
+ordering for every Unicode 17 `White_Space` character and `P*` punctuation.
+Version 1 treated some of these as unknown characters after letters. Recompute
+stored keys from the original text and rebuild indexes when adopting revision 2.
+Code-point keys retain their bytes, but keep revision/options metadata explicit.
+
+PostgreSQL extension 2.0 and the SQLite module expose `romantic_key_v2` only;
+there is deliberately no silent rebinding of `romantic_key_v1` to new semantics.
+There is no automatic SQL upgrade script from extension 1.0. Existing installations
+must migrate their dependent objects explicitly. Keep the old module while any
+index still depends on it, back up data, and coordinate connections before
+recreating dependent functions/indexes against the new module. A future ordering
+change likewise needs a new function revision and index/key rebuilds.
 
 Equal keys can represent different strings: Romanian canonical spellings,
 whitespace variants, and numeric equivalents in numeric modes can tie. A UNIQUE

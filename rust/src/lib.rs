@@ -1,4 +1,4 @@
-//! Independent Rust implementation. Zig defines ordering revision 1.
+//! Independent Rust implementation. Zig defines ordering revision 2.
 #![deny(clippy::unwrap_used, clippy::expect_used)]
 mod core;
 mod ffi;
